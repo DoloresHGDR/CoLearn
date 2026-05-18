@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Base de datos local
+*.db
+
+# Archivos generados por el sistema (uploads y caché de embeddings)
+backend/data/
+
+# Node
+node_modules/
+
+# Expo
+.expo/
+dist/
+
+# VSCode
+.vscode/
+
+# Mac
+.DS_Store
