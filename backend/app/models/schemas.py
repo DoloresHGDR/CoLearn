@@ -33,6 +33,32 @@ class UserResponse(BaseModel):
     role: str
 
 
+# --- Modelos de clases ---
+
+class ClassResponse(BaseModel):
+    """Datos de una clase devueltos al cliente."""
+    id: str
+    name: str
+    join_code: str
+    level: str
+    focuses: List[str]
+    created_at: str
+
+
+class CreateClassResponse(BaseModel):
+    """Respuesta completa al crear una clase: datos + actividad generada por la IA."""
+    class_info: ClassResponse
+    introduction: str
+    questions: List["Question"]
+    reflection: str
+
+
+class JoinClassResponse(BaseModel):
+    """Respuesta al unirse a una clase."""
+    message: str
+    class_info: ClassResponse
+
+
 # --- Modelos de sesión educativa ---
 
 # Representa una pregunta generada por la IA

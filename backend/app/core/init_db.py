@@ -41,6 +41,34 @@ def init_db():
             )
         """)
 
+        # Tabla de clases creadas por docentes
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS classes (
+                id TEXT PRIMARY KEY,
+                teacher_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                join_code TEXT UNIQUE NOT NULL,
+                level TEXT NOT NULL,
+                focuses TEXT NOT NULL,
+                file_path TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (teacher_id) REFERENCES users(id)
+            )
+        """)
+
+        # Tabla de alumnos inscritos en clases
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS class_enrollments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                class_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
+                joined_at TEXT NOT NULL,
+                FOREIGN KEY (class_id) REFERENCES classes(id),
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                UNIQUE(class_id, student_id)
+            )
+        """)
+
         conn.commit()
     finally:
         conn.close()
