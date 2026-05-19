@@ -59,39 +59,62 @@ class JoinClassResponse(BaseModel):
     class_info: ClassResponse
 
 
-# --- Modelos de sesión educativa ---
+# --- Modelos de chat ---
 
-# Representa una pregunta generada por la IA
+class ChatMessage(BaseModel):
+    """Un mensaje del historial de chat."""
+    role: str       # 'user' o 'assistant'
+    content: str
+    created_at: str
+
+
+class ChatRequest(BaseModel):
+    """Mensaje que envía el alumno."""
+    message: str
+
+
+class ChatResponse(BaseModel):
+    """Respuesta de la IA al alumno."""
+    reply: str
+
+
+# --- Modelos de evaluación de respuestas ---
+
+class AnswerRequest(BaseModel):
+    """Respuesta que envía el alumno a una pregunta."""
+    answer: str
+
+
+class EvaluationResponse(BaseModel):
+    """Resultado de evaluar la respuesta con Gemini."""
+    correct: str       # 'si', 'no' o 'parcial'
+    feedback: str
+    score: int
+
+
+# --- Modelos de métricas del docente ---
+
+class StudentMetrics(BaseModel):
+    """Participación de un alumno en la clase."""
+    student_id: str
+    name: str
+    email: str
+    message_count: int
+    answers_submitted: int
+    average_score: float
+    joined_at: str
+
+
+class ClassMetrics(BaseModel):
+    """Métricas generales de una clase para el docente."""
+    class_id: str
+    class_name: str
+    enrolled_count: int
+    students: List[StudentMetrics]
+
+
+# Representa una pregunta generada por la IA para una clase
 class Question(BaseModel):
     id: int
     question: str
     difficulty: str
-
-
-# Respuesta enviada al crear una sesión
-class CreateSessionResponse(BaseModel):
-    session_id: str
-    introduction: str
-    questions: List[Question]
-    reflection: str
-
-
-# Respuesta enviada por el alumno
-class StudentAnswer(BaseModel):
-    session_id: str
-    question_id: int
-    answer: str
-
-
-# Feedback generado por la IA
-class FeedbackResponse(BaseModel):
-    correct: bool
-    feedback: str
-    current_score: int
-
-
-# Resultado final de la sesión
-class FinalResult(BaseModel):
-    total_score: int
-    final_level: str
-    final_reflection: str
