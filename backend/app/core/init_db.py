@@ -19,28 +19,6 @@ def init_db():
             )
         """)
 
-        # Tabla de sesiones educativas
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                level TEXT,
-                focus TEXT,
-                score INTEGER
-            )
-        """)
-
-        # Tabla de respuestas del alumno
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS answers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT,
-                question_id INTEGER,
-                answer TEXT,
-                feedback TEXT,
-                points INTEGER
-            )
-        """)
-
         # Tabla de clases creadas por docentes
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS classes (
@@ -59,13 +37,56 @@ def init_db():
         # Tabla de alumnos inscritos en clases
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS class_enrollments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 class_id TEXT NOT NULL,
                 student_id TEXT NOT NULL,
                 joined_at TEXT NOT NULL,
                 FOREIGN KEY (class_id) REFERENCES classes(id),
                 FOREIGN KEY (student_id) REFERENCES users(id),
                 UNIQUE(class_id, student_id)
+            )
+        """)
+
+        # Tabla de preguntas generadas por la IA para cada clase
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS class_questions (
+                id SERIAL PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                question_order INTEGER NOT NULL,
+                question TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                FOREIGN KEY (class_id) REFERENCES classes(id)
+            )
+        """)
+
+        # Tabla de mensajes del chat entre el alumno y la IA
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id SERIAL PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (class_id) REFERENCES classes(id),
+                FOREIGN KEY (student_id) REFERENCES users(id)
+            )
+        """)
+
+        # Tabla de respuestas de alumnos a preguntas evaluadas por Gemini
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS student_answers (
+                id SERIAL PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
+                question_id INTEGER NOT NULL,
+                answer TEXT NOT NULL,
+                correct TEXT NOT NULL,
+                feedback TEXT NOT NULL,
+                score INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (class_id) REFERENCES classes(id),
+                FOREIGN KEY (student_id) REFERENCES users(id)
             )
         """)
 

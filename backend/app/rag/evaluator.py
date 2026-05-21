@@ -1,29 +1,25 @@
 import logging
 import os
 
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Configurar la API key de Gemini al iniciar el módulo
+# Crear el cliente de Gemini con la API key del entorno
 _api_key = os.getenv("GOOGLE_API_KEY")
 if _api_key:
-    genai.configure(api_key=_api_key)
+    _client = genai.Client(api_key=_api_key)
 else:
+    _client = None
     logger.warning("GOOGLE_API_KEY no está configurada. El evaluador no funcionará.")
 
 
 # Evalúa la respuesta del alumno usando Gemini
-def evaluate_answer(
-    question,
-    student_answer,
-    context,
-    difficulty
-):
-    if not _api_key:
+def evaluate_answer(question, student_answer, context, difficulty):
+    if not _client:
         raise Exception("GOOGLE_API_KEY no está configurada en el archivo .env")
 
     prompt = f"""
@@ -58,12 +54,14 @@ FEEDBACK:
 ...
 
 SCORE:
-...
+(número del 0 al 10)
 """
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        response = _client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+        )
 
         if response is None or not response.text:
             raise Exception("Gemini no devolvió ninguna respuesta válida.")
