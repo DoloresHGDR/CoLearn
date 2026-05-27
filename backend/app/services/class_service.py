@@ -2,7 +2,7 @@
 Servicio de clases: crear, unirse y listar clases educativas.
 """
 
-import random
+import secrets
 import string
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -19,6 +19,7 @@ from app.repositories.class_repository import (
     get_classes_by_teacher,
     is_enrolled,
 )
+from app.repositories.question_repository import get_questions_by_class, save_question
 from app.services.file_service import save_uploaded_file
 from app.services.generation_service import generate_activity
 from app.services.parser_service import parse_generated_activity
@@ -26,9 +27,9 @@ from app.services.rag_service import process_rag_pipeline
 
 
 def _generate_join_code() -> str:
-    """Genera un código corto y único tipo 'abc-123'."""
-    letters = "".join(random.choices(string.ascii_lowercase, k=3))
-    numbers = "".join(random.choices(string.digits, k=3))
+    """Genera un código corto y único tipo 'abc-123' usando aleatoriedad segura."""
+    letters = "".join(secrets.choice(string.ascii_lowercase) for _ in range(3))
+    numbers = "".join(secrets.choice(string.digits) for _ in range(3))
     return f"{letters}-{numbers}"
 
 
@@ -77,6 +78,15 @@ async def create_class_service(teacher_id, name, level, focuses, file) -> Create
         file_path=file_path,
         created_at=created_at,
     )
+
+    # Guardar las preguntas generadas en la DB (no en memoria)
+    for i, question in enumerate(parsed["questions"], start=1):
+        save_question(
+            class_id=class_id,
+            order=i,
+            question=question.question,
+            difficulty=question.difficulty
+        )
 
     class_info = ClassResponse(
         id=class_id,

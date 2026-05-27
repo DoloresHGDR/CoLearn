@@ -8,11 +8,11 @@ def read_file(file_path):
 
     # PDF
     if extension == ".pdf":
-        texto = ""
+        text = ""
         doc = fitz.open(file_path)
-        for pagina in doc:
-            texto += pagina.get_text()
-        return texto
+        for page in doc:
+            text += page.get_text()
+        return text
 
     # DOCX
     elif extension == ".docx":

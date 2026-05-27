@@ -2,14 +2,14 @@ from app.core.db import get_connection
 
 
 # Inserta un nuevo usuario en la base de datos
-def create_user(user_id: str, name: str, email: str, password_hash: str, role: str, created_at: str):
+def create_user(user_id, name, email, password_hash, role, created_at):
     conn = get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             """
             INSERT INTO users (id, name, email, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (user_id, name, email, password_hash, role, created_at)
         )
@@ -19,22 +19,22 @@ def create_user(user_id: str, name: str, email: str, password_hash: str, role: s
 
 
 # Busca un usuario por email
-def get_user_by_email(email: str):
+def get_user_by_email(email):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         return cursor.fetchone()
     finally:
         conn.close()
 
 
 # Busca un usuario por su ID
-def get_user_by_id(user_id: str):
+def get_user_by_id(user_id):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         return cursor.fetchone()
     finally:
         conn.close()

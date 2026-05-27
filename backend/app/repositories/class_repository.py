@@ -9,7 +9,7 @@ def create_class(class_id, teacher_id, name, join_code, level, focuses, file_pat
         cursor.execute(
             """
             INSERT INTO classes (id, teacher_id, name, join_code, level, focuses, file_path, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (class_id, teacher_id, name, join_code, level, ",".join(focuses), file_path, created_at)
         )
@@ -23,7 +23,7 @@ def get_class_by_code(join_code):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM classes WHERE join_code = ?", (join_code,))
+        cursor.execute("SELECT * FROM classes WHERE join_code = %s", (join_code,))
         return cursor.fetchone()
     finally:
         conn.close()
@@ -34,7 +34,7 @@ def get_class_by_id(class_id):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM classes WHERE id = ?", (class_id,))
+        cursor.execute("SELECT * FROM classes WHERE id = %s", (class_id,))
         return cursor.fetchone()
     finally:
         conn.close()
@@ -46,7 +46,7 @@ def get_classes_by_teacher(teacher_id):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
+            "SELECT * FROM classes WHERE teacher_id = %s ORDER BY created_at DESC",
             (teacher_id,)
         )
         return cursor.fetchall()
@@ -62,7 +62,7 @@ def enroll_student(class_id, student_id, joined_at):
         cursor.execute(
             """
             INSERT INTO class_enrollments (class_id, student_id, joined_at)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
             """,
             (class_id, student_id, joined_at)
         )
@@ -77,7 +77,7 @@ def is_enrolled(class_id, student_id):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT 1 FROM class_enrollments WHERE class_id = ? AND student_id = ?",
+            "SELECT 1 FROM class_enrollments WHERE class_id = %s AND student_id = %s",
             (class_id, student_id)
         )
         return cursor.fetchone() is not None
@@ -94,7 +94,7 @@ def get_classes_by_student(student_id):
             """
             SELECT c.* FROM classes c
             JOIN class_enrollments e ON c.id = e.class_id
-            WHERE e.student_id = ?
+            WHERE e.student_id = %s
             ORDER BY e.joined_at DESC
             """,
             (student_id,)

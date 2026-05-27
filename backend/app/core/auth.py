@@ -33,9 +33,9 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict:
-    """Decodifica un token JWT y devuelve su contenido. Lanza excepción si es inválido."""
+def decode_access_token(token: str) -> dict | None:
+    """Decodifica un token JWT. Devuelve el payload o None si es inválido."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        raise ValueError("Token inválido o expirado.")
+    except Exception:
+        return None

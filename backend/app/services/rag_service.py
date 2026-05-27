@@ -29,11 +29,7 @@ from app.rag.indexer import (
 
 
 # Ejecuta el flujo completo de procesamiento RAG
-def process_rag_pipeline(
-    file_path,
-    content
-
-):
+def process_rag_pipeline(file_path, content):
 
     # Generar hash del archivo para reutilizar cache
     file_hash = generate_file_hash(content)

@@ -76,9 +76,8 @@ def login_user(email: str, password: str) -> TokenResponse:
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> UserResponse:
     """Dependencia que extrae y valida el token del header Authorization."""
 
-    try:
-        payload = decode_access_token(credentials.credentials)
-    except ValueError:
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
         raise HTTPException(status_code=401, detail="Token inválido o expirado.")
 
     user = get_user_by_id(payload["sub"])
