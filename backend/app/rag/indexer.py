@@ -14,6 +14,12 @@ def create_index(embeddings):
     return index
 
 
+# Umbral de distancia L2 para considerar un chunk relevante.
+# Con embeddings normalizados: L2=1.2 equivale a similitud coseno ≈ 0.28.
+# Por encima de este umbral, el contenido se considera fuera de tema.
+SIMILARITY_THRESHOLD = 1.2
+
+
 # Recupera los chunks más relevantes según la pregunta
 def search_context(question, chunks, index, model):
     # Cantidad adaptativa de chunks a recuperar
@@ -25,19 +31,22 @@ def search_context(question, chunks, index, model):
     else:
         k = 6
 
-    # Generar embedding de la pregunta
+    # Generar embedding normalizado de la pregunta
     question_embedding = np.array(
-        model.encode([question])
+        model.encode([question], normalize_embeddings=True)
     ).astype("float32")
 
     # Buscar similitud en FAISS
     distances, indices = index.search(question_embedding, k)
 
-    # Recuperar chunks encontrados
+    # Filtrar chunks que superen el umbral de similitud
     context = []
-    for i in indices[0]:
-        if i < len(chunks):
-            context.append(chunks[i])
+    for dist, idx in zip(distances[0], indices[0]):
+        if idx < len(chunks) and dist <= SIMILARITY_THRESHOLD:
+            context.append(chunks[idx])
 
-    logger.info(f"Contexto recuperado: {len(context)} chunks de {total_chunks} disponibles")
+    logger.info(
+        f"Contexto recuperado: {len(context)} chunks relevantes de {total_chunks} disponibles "
+        f"(umbral L2={SIMILARITY_THRESHOLD})"
+    )
     return "\n".join(context)

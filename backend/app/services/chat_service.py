@@ -104,6 +104,18 @@ def send_message(class_id, student_id, message) -> ChatResponse:
         model=embedding_model
     )
 
+    # Si no hay contexto relevante, la pregunta está fuera del tema del texto
+    if not context:
+        off_topic_reply = (
+            "Esa pregunta no parece estar relacionada con el texto de la clase. "
+            "¿Querés preguntarme algo sobre el material que subió el docente?"
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        save_message(class_id=class_id, student_id=student_id, role="user", content=message, created_at=now)
+        assistant_time = datetime.now(timezone.utc).isoformat()
+        save_message(class_id=class_id, student_id=student_id, role="assistant", content=off_topic_reply, created_at=assistant_time)
+        return ChatResponse(reply=off_topic_reply)
+
     # Cargar historial reciente para mantener coherencia
     history = get_recent_history(class_id, student_id, limit=HISTORY_LIMIT)
 
