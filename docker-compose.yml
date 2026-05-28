@@ -1,0 +1,38 @@
+services:
+
+  # Base de datos PostgreSQL
+  db:
+    image: postgres:15
+    container_name: colearn_db
+    environment:
+      POSTGRES_USER: colearn
+      POSTGRES_PASSWORD: colearn123
+      POSTGRES_DB: colearn
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colearn"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend FastAPI
+  api:
+    build: ./backend
+    container_name: colearn_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://colearn:colearn123@db:5432/colearn
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/data:/app/data
+
+volumes:
+  postgres_data:
