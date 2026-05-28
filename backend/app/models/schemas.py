@@ -94,14 +94,24 @@ class EvaluationResponse(BaseModel):
 
 # --- Modelos de métricas del docente ---
 
+class AnswerRecord(BaseModel):
+    """Un intento de respuesta del alumno con su puntaje."""
+    question_id: int
+    correct: str
+    score: int
+    created_at: str
+
+
 class StudentMetrics(BaseModel):
-    """Participación de un alumno en la clase."""
+    """Participación y progreso de un alumno en la clase."""
     student_id: str
     name: str
     email: str
     message_count: int
     answers_submitted: int
     average_score: float
+    score_trend: str       # 'mejorando', 'estable', 'bajando' o 'sin datos'
+    answer_history: List[AnswerRecord]
     joined_at: str
 
 

@@ -1,6 +1,25 @@
 from app.core.db import get_connection
 
 
+# Devuelve el historial de respuestas de un alumno ordenado por fecha
+def get_student_answer_history(class_id: str, student_id: str) -> list:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT question_id, correct, score, created_at
+            FROM student_answers
+            WHERE class_id = %s AND student_id = %s
+            ORDER BY created_at ASC
+            """,
+            (class_id, student_id)
+        )
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
 # Devuelve los datos de participación de los alumnos en una clase
 def get_class_metrics(class_id: str) -> list:
     conn = get_connection()
