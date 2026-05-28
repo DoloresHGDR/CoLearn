@@ -32,6 +32,11 @@ IMPORTANT:
 - Avoid repetition
 - Use friendly language
 
+The 3 questions must follow Bloom's Taxonomy (Bloom, 1956) difficulty levels:
+- QUESTION EASY: targets "remember" or "understand" (levels 1-2) — recall facts or explain concepts
+- QUESTION MEDIUM: targets "apply" or "analyze" (levels 3-4) — use knowledge or break down ideas
+- QUESTION HARD: targets "evaluate" or "create" (levels 5-6) — judge, argue or build on the content
+
 Student level:
 {level}
 
