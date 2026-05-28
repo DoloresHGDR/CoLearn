@@ -30,17 +30,25 @@ def prepare_data(text):
     else:
         chunk_size = 5
 
-    # Crear chunks agrupando oraciones
+    # Solapamiento entre chunks: 1 oración compartida entre chunks adyacentes
+    # Evita perder contexto en los bordes (Lewis et al., 2020 — RAG original paper)
+    overlap = 1 if chunk_size > 1 else 0
+    step = chunk_size - overlap
+
+    # Crear chunks con solapamiento
     chunks = []
-    for i in range(0, total_sentences, chunk_size):
+    for i in range(0, total_sentences, step):
         chunk = " ".join(sentences[i:i + chunk_size])
         if chunk.strip():
             chunks.append(chunk)
 
-    # Generar embeddings
-    embeddings = model.encode(chunks)
+    # Generar embeddings normalizados (necesario para usar distancia coseno con umbral)
+    embeddings = model.encode(chunks, normalize_embeddings=True)
     embeddings = np.array(embeddings).astype("float32")
 
-    logger.info(f"Chunking completado: {total_sentences} oraciones, {len(chunks)} chunks (tamaño {chunk_size})")
+    logger.info(
+        f"Chunking completado: {total_sentences} oraciones → {len(chunks)} chunks "
+        f"(tamaño {chunk_size}, overlap {overlap})"
+    )
 
     return chunks, embeddings
