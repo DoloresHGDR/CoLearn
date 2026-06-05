@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AppButton from "../components/AppButton";
 import ClassCard from "../components/ClassCard";
-import { getClasses, getMe } from "../services/api";
+import { deleteClass, getClasses, getMe, leaveClass } from "../services/api";
 import { colors, spacing, typography } from "../styles/theme";
 
 export default function HomeScreen({ navigation }) {
@@ -11,6 +12,16 @@ export default function HomeScreen({ navigation }) {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16 }}>
+          <Ionicons name="log-out-outline" size={24} color={colors.textMuted} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const loadData = useCallback(async () => {
     try {
@@ -34,14 +45,46 @@ export default function HomeScreen({ navigation }) {
 
   function handleClassPress(classroom) {
     if (user?.role === "teacher") {
-      navigation.navigate("Metrics", { classId: classroom.id, className: classroom.name });
+      navigation.navigate("Metrics", {
+        classId: classroom.id,
+        className: classroom.name,
+        joinCode: classroom.join_code,
+      });
     } else {
       navigation.navigate("Chat", { classId: classroom.id, className: classroom.name });
     }
   }
 
-  function handleQuestionsPress(classroom) {
-    navigation.navigate("Questions", { classId: classroom.id, className: classroom.name });
+  async function handleDeleteOrLeave(classroom) {
+    try {
+      // Usar user directamente — isTeacher se declara después en el render
+      if (user?.role === "teacher") {
+        await deleteClass(classroom.id);
+      } else {
+        await leaveClass(classroom.id);
+      }
+      await loadData();
+    } catch (e) {
+      // error silencioso — el Alert ya dio feedback
+    }
+  }
+
+  function handleLogout() {
+    Alert.alert(
+      "Cerrar sesión",
+      "¿Estás seguro de que querés cerrar sesión?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Cerrar sesión",
+          style: "destructive",
+          onPress: async () => {
+            await AsyncStorage.removeItem("token");
+            navigation.replace("Login");
+          },
+        },
+      ]
+    );
   }
 
   if (loading) {
@@ -62,7 +105,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.role}>{isTeacher ? "Docente" : "Alumno"}</Text>
         </View>
         <AppButton
-          title={isTeacher ? "Nueva clase" : "Unirse"}
+          title={isTeacher ? "Nueva clase" : "Unirse a clase"}
           onPress={() => navigation.navigate(isTeacher ? "CreateClass" : "JoinClass")}
           style={styles.headerButton}
         />
@@ -74,8 +117,9 @@ export default function HomeScreen({ navigation }) {
         renderItem={({ item }) => (
           <ClassCard
             classroom={item}
+            isTeacher={isTeacher}
             onPress={() => handleClassPress(item)}
-            onQuestionsPress={user?.role === "student" ? () => handleQuestionsPress(item) : null}
+            onDelete={() => handleDeleteOrLeave(item)}
           />
         )}
         contentContainerStyle={styles.list}
@@ -85,7 +129,9 @@ export default function HomeScreen({ navigation }) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
-              {isTeacher ? "Todavía no creaste ninguna clase." : "Todavía no te uniste a ninguna clase."}
+              {isTeacher
+                ? "Todavía no creaste ninguna clase."
+                : "Todavía no te uniste a ninguna clase."}
             </Text>
           </View>
         }
@@ -126,6 +172,9 @@ const styles = StyleSheet.create({
   headerButton: {
     paddingVertical: 10,
     paddingHorizontal: spacing.md,
+  },
+  logoutButton: {
+    padding: 4,
   },
   list: {
     padding: spacing.lg,

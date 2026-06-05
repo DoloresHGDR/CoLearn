@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppInput from "../components/AppInput";
 import { joinClass } from "../services/api";
@@ -10,9 +10,19 @@ export default function JoinClassScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Inserta el guion automáticamente después de los primeros 3 caracteres
+  function handleCodeChange(text) {
+    const clean = text.replace(/-/g, "").toLowerCase().slice(0, 6);
+    if (clean.length > 3) {
+      setCode(clean.slice(0, 3) + "-" + clean.slice(3));
+    } else {
+      setCode(clean);
+    }
+  }
+
   async function handleJoin() {
-    if (!code.trim()) {
-      setError("Ingresá el código de la clase.");
+    if (code.length < 7) {
+      setError("El código tiene el formato abc-123.");
       return;
     }
     setError("");
@@ -30,8 +40,10 @@ export default function JoinClassScreen({ navigation }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={80}
     >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
         <Text style={styles.title}>Unirse a una clase</Text>
         <Text style={styles.subtitle}>
@@ -44,14 +56,16 @@ export default function JoinClassScreen({ navigation }) {
         <AppInput
           label="Código de clase"
           value={code}
-          onChangeText={setCode}
+          onChangeText={handleCodeChange}
           placeholder="abc-123"
           autoCapitalize="none"
           autoCorrect={false}
+          maxLength={7}
         />
 
         <AppButton title="Unirse" onPress={handleJoin} loading={loading} />
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -61,10 +75,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
-    flex: 1,
+  scroll: {
+    flexGrow: 1,
     justifyContent: "center",
+  },
+  content: {
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
   },
   title: {
     ...typography.title,

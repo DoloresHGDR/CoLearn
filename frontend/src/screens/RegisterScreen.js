@@ -24,6 +24,18 @@ export default function RegisterScreen({ navigation }) {
       setError("Completá todos los campos.");
       return;
     }
+    if (name.trim().length < 2) {
+      setError("El nombre debe tener al menos 2 caracteres.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("El email no tiene un formato válido.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
@@ -33,7 +45,9 @@ export default function RegisterScreen({ navigation }) {
       await AsyncStorage.setItem("token", data.access_token);
       navigation.replace("Home");
     } catch (e) {
-      setError(e.message);
+      // Mostrar mensaje de error descriptivo
+      const msg = e.message || "Error desconocido. Verificá tu conexión.";
+      setError(msg);
     } finally {
       setLoading(false);
     }

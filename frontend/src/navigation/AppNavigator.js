@@ -9,6 +9,7 @@ import LoginScreen from "../screens/LoginScreen";
 import MetricsScreen from "../screens/MetricsScreen";
 import QuestionsScreen from "../screens/QuestionsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import TeacherQuestionsScreen from "../screens/TeacherQuestionsScreen";
 import { colors } from "../styles/theme";
 
 const Stack = createStackNavigator();
@@ -44,6 +45,11 @@ export default function AppNavigator() {
           name="Metrics"
           component={MetricsScreen}
           options={({ route }) => ({ title: route.params?.className || "Métricas" })}
+        />
+        <Stack.Screen
+          name="TeacherQuestions"
+          component={TeacherQuestionsScreen}
+          options={{ title: "Preguntas de la IA" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

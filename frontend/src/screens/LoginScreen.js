@@ -17,6 +17,10 @@ export default function LoginScreen({ navigation }) {
       setError("Completá todos los campos.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("El email no tiene un formato válido.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {

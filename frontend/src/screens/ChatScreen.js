@@ -1,6 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -10,29 +15,45 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getChatHistory, sendMessage } from "../services/api";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BASE_URL, getChatHistory, sendMessage } from "../services/api";
 import { colors, radius, spacing, typography } from "../styles/theme";
 
 export default function ChatScreen({ route }) {
   const { classId, className } = route.params;
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState(false);
   const flatListRef = useRef(null);
 
   useEffect(() => {
-    loadHistory();
+    initChat();
   }, []);
 
-  async function loadHistory() {
+  async function initChat() {
     try {
       const history = await getChatHistory(classId);
-      setMessages(history);
+      if (history.length === 0) {
+        // Chat vacío → pedir intro al backend
+        setSending(true);
+        const data = await sendMessage(classId, "__init__");
+        setMessages([{ role: "assistant", content: data.reply, created_at: new Date().toISOString() }]);
+      } else {
+        setMessages(history);
+      }
     } catch (e) {
-      // Si falla, empezamos con chat vacío
+      // Si falla la intro, mostrar mensaje de bienvenida básico
+      setMessages([{
+        role: "assistant",
+        content: "Hola! Cuando estes listo para empezar, escribime y comenzamos con las preguntas.",
+        created_at: new Date().toISOString(),
+      }]);
     } finally {
       setLoading(false);
+      setSending(false);
     }
   }
 
@@ -40,7 +61,6 @@ export default function ChatScreen({ route }) {
     const text = input.trim();
     if (!text || sending) return;
 
-    // Mostrar el mensaje del alumno inmediatamente
     const userMsg = { role: "user", content: text, created_at: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -51,10 +71,60 @@ export default function ChatScreen({ route }) {
       const aiMsg = { role: "assistant", content: data.reply, created_at: new Date().toISOString() };
       setMessages((prev) => [...prev, aiMsg]);
     } catch (e) {
-      const errMsg = { role: "assistant", content: "Hubo un error al contactar al tutor. Intentá de nuevo.", created_at: new Date().toISOString() };
+      const errMsg = {
+        role: "assistant",
+        content: "Hubo un error al contactar al tutor. Intentá de nuevo.",
+        created_at: new Date().toISOString(),
+      };
       setMessages((prev) => [...prev, errMsg]);
     } finally {
       setSending(false);
+    }
+  }
+
+  // Descarga el archivo con autenticación y lo abre con la app preferida
+  async function handleVerTexto() {
+    setDownloadingFile(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const url = `${BASE_URL}/classes/${classId}/file`;
+
+      // Primero hacer HEAD para obtener el nombre real del archivo
+      const headRes = await fetch(url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!headRes.ok) {
+        Alert.alert("Error", "El archivo no está disponible en el servidor.");
+        return;
+      }
+
+      // Obtener extensión del Content-Type o Content-Disposition
+      const contentType = headRes.headers.get("content-type") || "";
+      const disposition = headRes.headers.get("content-disposition") || "";
+      let ext = ".pdf";
+      if (disposition.includes(".docx")) ext = ".docx";
+      else if (disposition.includes(".txt")) ext = ".txt";
+      else if (contentType.includes("word")) ext = ".docx";
+      else if (contentType.includes("text")) ext = ".txt";
+
+      const localUri = FileSystem.documentDirectory + `texto_clase${ext}`;
+
+      // Descargar con autenticación
+      const result = await FileSystem.downloadAsync(url, localUri, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (result.status === 200) {
+        await Sharing.shareAsync(result.uri, { mimeType: contentType || "application/pdf" });
+      } else {
+        Alert.alert("Error", `El servidor respondió con código ${result.status}.`);
+      }
+    } catch (e) {
+      Alert.alert("Error", `No se pudo abrir el archivo: ${e.message}`);
+    } finally {
+      setDownloadingFile(false);
     }
   }
 
@@ -63,7 +133,9 @@ export default function ChatScreen({ route }) {
     return (
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAI]}>
         {!isUser && <Text style={styles.aiLabel}>Tutor IA</Text>}
-        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
+        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+          {item.content}
+        </Text>
       </View>
     );
   }
@@ -82,6 +154,23 @@ export default function ChatScreen({ route }) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={90}
     >
+      {/* Botón "Ver texto" en la parte superior */}
+      <TouchableOpacity
+        style={styles.verTextoBar}
+        onPress={handleVerTexto}
+        disabled={downloadingFile}
+      >
+        {downloadingFile
+          ? <ActivityIndicator color={colors.primary} size="small" />
+          : (
+            <View style={styles.verTextoContent}>
+              <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+              <Text style={styles.verTextoText}>Ver texto de la clase</Text>
+            </View>
+          )
+        }
+      </TouchableOpacity>
+
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -89,22 +178,18 @@ export default function ChatScreen({ route }) {
         renderItem={renderMessage}
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        ListEmptyComponent={
-          <Text style={styles.emptyChat}>
-            Empezá la conversación haciendo una pregunta sobre el texto de la clase.
-          </Text>
-        }
       />
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: spacing.md + insets.bottom }]}>
         <TextInput
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="Escribí tu pregunta..."
+          placeholder="Escribí tu respuesta..."
           placeholderTextColor={colors.textMuted}
           multiline
           maxLength={500}
+          editable={!sending}
         />
         <TouchableOpacity
           style={[styles.sendButton, (!input.trim() || sending) && styles.sendButtonDisabled]}
@@ -113,7 +198,7 @@ export default function ChatScreen({ route }) {
         >
           {sending
             ? <ActivityIndicator color={colors.white} size="small" />
-            : <Text style={styles.sendIcon}>➤</Text>
+            : <Ionicons name="send" size={18} color={colors.white} />
           }
         </TouchableOpacity>
       </View>
@@ -122,14 +207,25 @@ export default function ChatScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: colors.background },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  verTextoBar: {
+    backgroundColor: colors.white,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     alignItems: "center",
-    justifyContent: "center",
+  },
+  verTextoContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  verTextoText: {
+    color: colors.primary,
+    fontWeight: "600",
+    fontSize: 13,
   },
   messageList: {
     padding: spacing.md,
@@ -159,19 +255,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginBottom: 4,
   },
-  bubbleText: {
-    ...typography.body,
-    lineHeight: 20,
-  },
-  bubbleTextUser: {
-    color: colors.white,
-  },
-  emptyChat: {
-    ...typography.muted,
-    textAlign: "center",
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
-  },
+  bubbleText: { ...typography.body, lineHeight: 20 },
+  bubbleTextUser: { color: colors.white },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -200,11 +285,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sendButtonDisabled: {
-    backgroundColor: colors.border,
-  },
-  sendIcon: {
-    color: colors.white,
-    fontSize: 16,
-  },
+  sendButtonDisabled: { backgroundColor: colors.border },
 });

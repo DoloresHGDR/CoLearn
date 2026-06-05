@@ -1,18 +1,21 @@
 import * as DocumentPicker from "expo-document-picker";
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppInput from "../components/AppInput";
 import { createClass } from "../services/api";
 import { colors, radius, spacing, typography } from "../styles/theme";
 
-const LEVELS = ["primaria", "secundaria", "universitario"];
-const FOCUSES = ["comprensión lectora", "vocabulario", "análisis crítico", "síntesis", "inferencia"];
+const DEFAULT_FOCUSES = ["comprensión lectora", "vocabulario", "análisis crítico", "síntesis", "inferencia"];
+
+// Sistema diseñado para 7mo grado de primaria (TIF — Universidad de Mendoza)
+const LEVEL = "7mo grado de primaria";
 
 export default function CreateClassScreen({ navigation }) {
   const [name, setName] = useState("");
-  const [level, setLevel] = useState("secundaria");
+  const [focuses, setFocuses] = useState(DEFAULT_FOCUSES);
   const [selectedFocuses, setSelectedFocuses] = useState(["comprensión lectora"]);
+  const [customFocus, setCustomFocus] = useState("");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,6 +24,16 @@ export default function CreateClassScreen({ navigation }) {
     setSelectedFocuses((prev) =>
       prev.includes(focus) ? prev.filter((f) => f !== focus) : [...prev, focus]
     );
+  }
+
+  function addCustomFocus() {
+    const val = customFocus.trim().toLowerCase();
+    if (!val) return;
+    if (!focuses.includes(val)) {
+      setFocuses((prev) => [...prev, val]);
+    }
+    setSelectedFocuses((prev) => prev.includes(val) ? prev : [...prev, val]);
+    setCustomFocus("");
   }
 
   async function pickFile() {
@@ -40,7 +53,7 @@ export default function CreateClassScreen({ navigation }) {
     setError("");
     setLoading(true);
     try {
-      await createClass(name, level, selectedFocuses, file.uri, file.name, file.mimeType);
+      await createClass(name, LEVEL, selectedFocuses, file.uri, file.name, file.mimeType);
       navigation.goBack();
     } catch (e) {
       setError(e.message);
@@ -62,26 +75,10 @@ export default function CreateClassScreen({ navigation }) {
         placeholder="Ej: Fotosíntesis — 5to año"
       />
 
-      {/* Selector de nivel */}
-      <Text style={styles.sectionLabel}>Nivel</Text>
-      <View style={styles.chipRow}>
-        {LEVELS.map((l) => (
-          <TouchableOpacity
-            key={l}
-            style={[styles.chip, level === l && styles.chipSelected]}
-            onPress={() => setLevel(l)}
-          >
-            <Text style={[styles.chipText, level === l && styles.chipTextSelected]}>
-              {l.charAt(0).toUpperCase() + l.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* Selector de enfoques */}
       <Text style={styles.sectionLabel}>Enfoques pedagógicos</Text>
       <View style={styles.chipRow}>
-        {FOCUSES.map((f) => (
+        {focuses.map((f) => (
           <TouchableOpacity
             key={f}
             style={[styles.chip, selectedFocuses.includes(f) && styles.chipSelected]}
@@ -92,6 +89,22 @@ export default function CreateClassScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* Agregar enfoque personalizado */}
+      <View style={styles.customFocusRow}>
+        <TextInput
+          style={styles.customFocusInput}
+          value={customFocus}
+          onChangeText={setCustomFocus}
+          placeholder="Agregar otro enfoque..."
+          placeholderTextColor={colors.textMuted}
+          onSubmitEditing={addCustomFocus}
+          returnKeyType="done"
+        />
+        <TouchableOpacity style={styles.addButton} onPress={addCustomFocus}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Selector de archivo */}
@@ -160,6 +173,36 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: colors.primary,
+  },
+  customFocusRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  customFocusInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 13,
+    color: colors.text,
+    backgroundColor: colors.white,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addButtonText: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: "600",
+    lineHeight: 26,
   },
   filePicker: {
     borderWidth: 1.5,

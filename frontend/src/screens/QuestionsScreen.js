@@ -9,29 +9,53 @@ import {
   View,
 } from "react-native";
 import AppButton from "../components/AppButton";
-import { getQuestions, submitAnswer } from "../services/api";
+import { getMyProgress, getQuestions, submitAnswer } from "../services/api";
 import { colors, radius, spacing, typography } from "../styles/theme";
 
 const DIFFICULTY_LABEL = { easy: "Fácil", medium: "Media", hard: "Difícil" };
 const DIFFICULTY_COLOR = { easy: "#10B981", medium: "#F59E0B", hard: "#EF4444" };
+const DIFFICULTY_ORDER = { easy: 0, medium: 1, hard: 2 };
 const CORRECT_LABEL = { si: "✓ Correcto", parcial: "◑ Parcial", no: "✗ Incorrecto" };
 const CORRECT_COLOR = { si: colors.success, parcial: colors.warning, no: colors.error };
+
+const LEVEL_LABEL = { easy: "Fácil", medium: "Media", hard: "Difícil" };
+const LEVEL_DESC = {
+  easy: "Empezá por las preguntas de nivel fácil.",
+  medium: "Ya dominás lo básico. Pasá al nivel medio.",
+  hard: "¡Excelente desempeño! Desafiate con las preguntas difíciles.",
+};
+
+// Ordena preguntas: nivel recomendado primero, luego el resto
+function sortByRecommended(questions, recommended) {
+  const order = DIFFICULTY_ORDER[recommended] ?? 0;
+  return [...questions].sort((a, b) => {
+    const da = Math.abs(DIFFICULTY_ORDER[a.difficulty] - order);
+    const db = Math.abs(DIFFICULTY_ORDER[b.difficulty] - order);
+    return da - db;
+  });
+}
 
 export default function QuestionsScreen({ route }) {
   const { classId } = route.params;
   const [questions, setQuestions] = useState([]);
+  const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState(true);
   // Estado por pregunta: answer, submitting, result
   const [answers, setAnswers] = useState({});
 
   useEffect(() => {
-    loadQuestions();
+    loadAll();
   }, []);
 
-  async function loadQuestions() {
+  async function loadAll() {
     try {
-      const data = await getQuestions(classId);
-      setQuestions(data);
+      // Carga preguntas y progreso en paralelo
+      const [qs, prog] = await Promise.all([
+        getQuestions(classId),
+        getMyProgress(classId),
+      ]);
+      setProgress(prog);
+      setQuestions(sortByRecommended(qs, prog.recommended_level));
     } finally {
       setLoading(false);
     }
@@ -71,6 +95,16 @@ export default function QuestionsScreen({ route }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Preguntas de la clase</Text>
+
+      {/* Banner de nivel recomendado (Mastery Learning — Bloom, 1968) */}
+      {progress && (
+        <View style={[styles.levelBanner, { borderColor: DIFFICULTY_COLOR[progress.recommended_level] }]}>
+          <Text style={[styles.levelTitle, { color: DIFFICULTY_COLOR[progress.recommended_level] }]}>
+            Nivel recomendado: {LEVEL_LABEL[progress.recommended_level]}
+          </Text>
+          <Text style={styles.levelDesc}>{LEVEL_DESC[progress.recommended_level]}</Text>
+        </View>
+      )}
 
       {questions.map((q) => {
         const state = answers[q.id] || {};
@@ -146,6 +180,22 @@ const styles = StyleSheet.create({
   title: {
     ...typography.title,
     marginBottom: spacing.lg,
+  },
+  levelBanner: {
+    borderWidth: 1.5,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.white,
+  },
+  levelTitle: {
+    fontWeight: "700",
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  levelDesc: {
+    ...typography.muted,
+    fontSize: 13,
   },
   card: {
     backgroundColor: colors.white,
