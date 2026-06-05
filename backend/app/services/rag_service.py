@@ -63,13 +63,9 @@ def process_rag_pipeline(file_path, content):
             }
         )
 
-    # Recuperar contexto relevante
-    context = search_context(
-        question="comprensión lectora",
-        chunks=chunks,
-        index=index,
-        model=model
-    )
+    # Para generación: usar el texto completo (truncado) para que la IA genere
+    # preguntas sobre el contenido real del documento, no sobre las habilidades en abstracto
+    context = text[:4000] if len(text) > 4000 else text
 
     return {
         "text": text,
