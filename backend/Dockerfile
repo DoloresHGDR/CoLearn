@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copiar e instalar dependencias Python primero (mejor uso de caché de Docker)
 COPY requirements.txt .
+# Instalar PyTorch CPU-only primero para evitar bajar librerías NVIDIA innecesarias
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el resto del código
