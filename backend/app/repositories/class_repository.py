@@ -85,6 +85,33 @@ def is_enrolled(class_id, student_id):
         conn.close()
 
 
+# Elimina una clase y todo su contenido (CASCADE)
+def delete_class(class_id):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        for table in ["student_answers", "chat_messages", "class_questions", "class_enrollments"]:
+            cursor.execute(f"DELETE FROM {table} WHERE class_id = %s", (class_id,))
+        cursor.execute("DELETE FROM classes WHERE id = %s", (class_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# Elimina la inscripción de un alumno en una clase (sin borrar la clase)
+def leave_class(class_id, student_id):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM class_enrollments WHERE class_id = %s AND student_id = %s",
+            (class_id, student_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # Devuelve todas las clases en las que está inscrito un alumno
 def get_classes_by_student(student_id):
     conn = get_connection()

@@ -2,6 +2,7 @@ import os
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from app.models.schemas import (
     AnswerRequest,
@@ -13,6 +14,7 @@ from app.models.schemas import (
     CreateClassResponse,
     EvaluationResponse,
     JoinClassResponse,
+    StudentProgress,
     UserResponse,
 )
 from app.models.schemas import Question
@@ -25,8 +27,9 @@ from app.services.class_service import (
     list_student_classes,
     list_teacher_classes,
 )
+from app.repositories.class_repository import delete_class, leave_class
 from app.services.evaluation_service import evaluate_student_answer
-from app.services.metrics_service import get_metrics
+from app.services.metrics_service import get_metrics, get_my_progress
 
 router = APIRouter(prefix="/classes", tags=["Clases"])
 
@@ -82,6 +85,40 @@ def join_class(
         raise HTTPException(status_code=403, detail="Solo los alumnos pueden unirse a clases.")
 
     return join_class_service(student_id=current_user.id, join_code=join_code)
+
+
+# Descarga el archivo de la clase (alumno puede abrirlo con su app preferida)
+@router.get("/{class_id}/file")
+def download_class_file(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    from app.repositories.class_repository import get_class_by_id as _get
+    classroom = _get(class_id)
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Clase no encontrada.")
+    file_path = classroom.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="El archivo de la clase no está disponible.")
+    return FileResponse(path=file_path, filename=os.path.basename(file_path))
+
+
+# El docente ve todas las preguntas generadas para su clase (sin duplicados)
+@router.get("/{class_id}/teacher-questions", response_model=List[Question])
+def teacher_questions(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los docentes pueden ver las preguntas.")
+    rows = get_questions_by_class(class_id)
+    seen = set()
+    unique = []
+    for r in rows:
+        if r["question"] not in seen:
+            seen.add(r["question"])
+            unique.append(Question(id=r["id"], question=r["question"], difficulty=r["difficulty"]))
+    return unique
 
 
 # El alumno envía un mensaje y recibe la respuesta de la IA
@@ -143,6 +180,46 @@ def answer_question(
         question_id=question_id,
         answer=body.answer,
     )
+
+
+# El alumno consulta su propio progreso para la dificultad adaptativa
+@router.get("/{class_id}/my-progress", response_model=StudentProgress)
+def my_progress(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Solo los alumnos tienen progreso propio.")
+
+    return get_my_progress(class_id=class_id, student_id=current_user.id)
+
+
+# El docente elimina su clase (cascade — se borra para todos)
+@router.delete("/{class_id}", status_code=204)
+def delete_class_route(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los docentes pueden eliminar clases.")
+    from app.repositories.class_repository import get_class_by_id as _get
+    classroom = _get(class_id)
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Clase no encontrada.")
+    if classroom["teacher_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="No tenés permiso para eliminar esta clase.")
+    delete_class(class_id)
+
+
+# El alumno sale de una clase (solo elimina su inscripción)
+@router.delete("/{class_id}/leave", status_code=204)
+def leave_class_route(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Solo los alumnos pueden salirse de una clase.")
+    leave_class(class_id, current_user.id)
 
 
 # El docente ve las métricas de participación de su clase
