@@ -128,3 +128,10 @@ class Question(BaseModel):
     id: int
     question: str
     difficulty: str
+
+
+class StudentProgress(BaseModel):
+    """Progreso propio del alumno en una clase — usado para dificultad adaptativa."""
+    answers_submitted: int
+    average_score: float
+    recommended_level: str   # 'easy', 'medium' o 'hard' (Mastery Learning — Bloom, 1968)

@@ -1,6 +1,26 @@
 from app.core.db import get_connection
 
 
+# Devuelve el puntaje promedio y cantidad de respuestas del propio alumno
+def get_my_stats(class_id: str, student_id: str) -> dict:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*)                  AS answers_submitted,
+                COALESCE(AVG(score), 0)   AS average_score
+            FROM student_answers
+            WHERE class_id = %s AND student_id = %s
+            """,
+            (class_id, student_id)
+        )
+        return cursor.fetchone()
+    finally:
+        conn.close()
+
+
 # Devuelve el historial de respuestas de un alumno ordenado por fecha
 def get_student_answer_history(class_id: str, student_id: str) -> list:
     conn = get_connection()

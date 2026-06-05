@@ -65,6 +65,15 @@ def evaluate_student_answer(class_id: str, student_id: str, question_id: int, an
     # Parsear la respuesta del evaluador
     result = parse_evaluation(raw_response)
 
+    # Aplicar capeo de score para consistencia con la evaluación del chat
+    # (incorrecto ≤ 3, parcial 4-6, correcto ≥ 7 — Mastery Learning)
+    if result["correct"] == "si":
+        result["score"] = max(result["score"], 7)
+    elif result["correct"] == "no":
+        result["score"] = min(result["score"], 3)
+    else:
+        result["score"] = max(4, min(result["score"], 6))
+
     # Guardar en la base de datos
     now = datetime.now(timezone.utc).isoformat()
     save_student_answer(
