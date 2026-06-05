@@ -1,52 +1,46 @@
 """
-Servicio encargado de la generación de contenido con OpenRouter.
-
-Se utiliza para:
-- construir prompts
-- generar actividades educativas
-- centralizar la configuración del modelo
+Servicio de generación de actividades educativas.
+Todas las llamadas a IA usan OpenRouter (GPT-3.5-turbo).
 """
 
 import logging
+
 import requests
+from fastapi import HTTPException
 
 from app.core.config import OPENROUTER_API_KEY
 
 logger = logging.getLogger(__name__)
 
 
-# Genera actividades educativas a partir del contexto recuperado
-def generate_activity(
-    level,
-    focuses,
-    context
-):
+def generate_activity(level, focuses, context):
+    """Genera preguntas educativas sobre el texto usando OpenRouter."""
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY no está configurada.")
+
     focus_text = ", ".join(focuses)
 
-    prompt = f"""
-You are an educational AI tutor.
+    prompt = f"""Sos un tutor educativo para alumnos de 7mo grado de primaria (12-13 años) en Argentina.
 
-IMPORTANT:
-- Always respond in Spanish
-- Generate EXACTLY 3 questions
-- Avoid repetition
-- Use friendly language
+IMPORTANTE:
+- Responde SIEMPRE en español
+- Genera EXACTAMENTE 3 preguntas sobre el texto que se te da abajo
+- Las preguntas deben ser sobre el CONTENIDO del texto, no sobre habilidades en abstracto
+- Usa lenguaje claro para preadolescentes de 12-13 años
+- Evita vocabulario tecnico innecesario
 
-The 3 questions must follow Bloom's Taxonomy (Bloom, 1956) difficulty levels:
-- QUESTION EASY: targets "remember" or "understand" (levels 1-2) — recall facts or explain concepts
-- QUESTION MEDIUM: targets "apply" or "analyze" (levels 3-4) — use knowledge or break down ideas
-- QUESTION HARD: targets "evaluate" or "create" (levels 5-6) — judge, argue or build on the content
+Las 3 preguntas deben seguir la Taxonomia de Bloom (Bloom, 1956):
+- QUESTION EASY: apunta a "recordar" o "entender" (niveles 1-2) — recordar datos o explicar conceptos del texto
+- QUESTION MEDIUM: apunta a "aplicar" o "analizar" (niveles 3-4) — usar lo aprendido o comparar ideas del texto
+- QUESTION HARD: apunta a "evaluar" o "crear" (niveles 5-6) — dar una opinion con fundamentos o imaginar un escenario
 
-Student level:
-{level}
+Nivel: {level}
+Enfoques pedagogicos: {focus_text}
 
-Pedagogical focuses:
-{focus_text}
-
-Context:
+Texto de la clase:
 {context}
 
-FORMAT:
+FORMATO DE RESPUESTA (respeta exactamente):
 
 INTRODUCTION:
 ...
@@ -73,34 +67,24 @@ REFLECTION:
             },
             json={
                 "model": "openai/gpt-3.5-turbo",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+                "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.9,
-                "top_p": 0.95,
                 "max_tokens": 1024
             },
-            timeout=30
+            timeout=60
         )
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.Timeout:
-        raise Exception("La IA tardó demasiado en responder. Intenta de nuevo.")
-    except requests.exceptions.ConnectionError:
-        raise Exception("No se pudo conectar con el servicio de IA. Verifica tu conexión.")
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Error al llamar a OpenRouter: {str(e)}")
 
-    if "error" in data:
-        raise Exception(f"Error de OpenRouter: {data['error']['message']}")
+        if "error" in data:
+            raise Exception(f"Error de OpenRouter: {data['error']['message']}")
+        if "choices" not in data or not data["choices"]:
+            raise Exception("OpenRouter no devolvio ninguna respuesta valida.")
 
-    if "choices" not in data or not data["choices"]:
-        raise Exception("La IA no devolvió ninguna respuesta válida.")
+        logger.info("Actividad generada correctamente por OpenRouter")
+        return data["choices"][0]["message"]["content"]
 
-    generated_text = data["choices"][0]["message"]["content"]
-    logger.info("Actividad generada correctamente por OpenRouter")
-    return generated_text
-
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise Exception(f"Error al generar actividad: {str(e)}")

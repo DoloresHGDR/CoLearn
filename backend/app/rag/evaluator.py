@@ -1,49 +1,35 @@
 import logging
-import os
 
-from google import genai
-from dotenv import load_dotenv
+import requests
 
-load_dotenv()
+from app.core.config import OPENROUTER_API_KEY
 
 logger = logging.getLogger(__name__)
 
-# Crear el cliente de Gemini con la API key del entorno
-_api_key = os.getenv("GOOGLE_API_KEY")
-if _api_key:
-    _client = genai.Client(api_key=_api_key)
-else:
-    _client = None
-    logger.warning("GOOGLE_API_KEY no está configurada. El evaluador no funcionará.")
 
-
-# Evalúa la respuesta del alumno usando Gemini
 def evaluate_answer(question, student_answer, context, difficulty):
-    if not _client:
-        raise Exception("GOOGLE_API_KEY no está configurada en el archivo .env")
+    """Evalúa la respuesta del alumno usando OpenRouter."""
+    if not OPENROUTER_API_KEY:
+        raise Exception("OPENROUTER_API_KEY no está configurada en el archivo .env")
 
-    prompt = f"""
-Eres un tutor pedagógico amable pero honesto.
-Debes evaluar la respuesta de un alumno.
+    prompt = f"""Sos un tutor pedagogico para alumnos de 7mo grado de primaria (12-13 años) en Argentina.
+Evalua la respuesta del alumno de forma clara y alentadora.
 
 Reglas:
-- Si está bien, dilo claramente
-- Si está parcialmente bien, explícalo
-- Si está mal, dilo claramente pero con amabilidad
-- Nunca inventes información fuera del contexto
-- Usa lenguaje simple para un alumno de secundaria
+- Si esta bien, decilo claramente
+- Si esta parcialmente bien, explicalo
+- Si esta mal, decilo con amabilidad
+- Nunca inventes informacion fuera del contexto
+- Usa lenguaje apropiado para preadolescentes de 7mo grado
 
-La dificultad de esta pregunta es:
-{difficulty}
+Dificultad de la pregunta: {difficulty}
 
-Contexto:
+Contexto del texto:
 {context}
 
-Pregunta:
-{question}
+Pregunta: {question}
 
-Respuesta del alumno:
-{student_answer}
+Respuesta del alumno: {student_answer}
 
 Devuelve EXACTAMENTE este formato:
 
@@ -54,20 +40,30 @@ FEEDBACK:
 ...
 
 SCORE:
-(número del 0 al 10)
+(numero del 0 al 10)
 """
 
     try:
-        response = _client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "openai/gpt-3.5-turbo",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+                "max_tokens": 512
+            },
+            timeout=30
         )
-
-        if response is None or not response.text:
-            raise Exception("Gemini no devolvió ninguna respuesta válida.")
-
-        logger.info("Evaluación generada correctamente por Gemini")
-        return response.text
+        response.raise_for_status()
+        data = response.json()
+        if "error" in data:
+            raise Exception(f"Error de OpenRouter: {data['error']['message']}")
+        logger.info("Evaluacion generada correctamente por OpenRouter")
+        return data["choices"][0]["message"]["content"]
 
     except Exception as e:
-        raise Exception(f"Error al evaluar con Gemini: {str(e)}")
+        raise Exception(f"Error al evaluar: {str(e)}")

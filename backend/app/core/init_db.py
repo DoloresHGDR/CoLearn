@@ -73,7 +73,7 @@ def init_db():
             )
         """)
 
-        # Tabla de respuestas de alumnos a preguntas evaluadas por Gemini
+        # Tabla de respuestas de alumnos a preguntas evaluadas por la IA (OpenRouter)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS student_answers (
                 id SERIAL PRIMARY KEY,
