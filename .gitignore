@@ -22,3 +22,7 @@ dist/
 
 # Mac
 .DS_Store
+
+# Claude Code — archivos internos del asistente, no deben commitearse
+CLAUDE.md
+.claude/
