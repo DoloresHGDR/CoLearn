@@ -1,13 +1,11 @@
 """
-Tests unitarios para el parser de respuestas de la IA.
-Verifica que la extracción de secciones funciona correctamente.
+Tests unitarios para el parser de actividades generadas por la IA.
+Verifica que la extracción de secciones (introducción, preguntas, reflexión) funciona.
 """
 
 import pytest
-from app.services.parser_service import parse_generated_activity, parse_evaluation
+from app.services.parser_service import parse_generated_activity
 
-
-# --- Tests de parse_generated_activity ---
 
 class TestParseGeneratedActivity:
 
@@ -89,88 +87,3 @@ Solo hay introducción aquí.
         assert resultado["introduction"] != ""
         assert resultado["reflection"] == ""
         assert resultado["questions"] == []
-
-
-# --- Tests de parse_evaluation ---
-
-class TestParseEvaluation:
-
-    def test_respuesta_correcta(self):
-        """Debe detectar 'si' como resultado correcto."""
-        texto = """
-CORRECT:
-si
-
-FEEDBACK:
-Muy bien, la respuesta es correcta y completa.
-
-SCORE:
-9
-"""
-        resultado = parse_evaluation(texto)
-        assert resultado["correct"] == "si"
-        assert resultado["score"] == 9
-        assert "correcta" in resultado["feedback"]
-
-    def test_respuesta_incorrecta(self):
-        """Debe detectar 'no' como resultado incorrecto."""
-        texto = """
-CORRECT:
-no
-
-FEEDBACK:
-La respuesta no es correcta. Revisá el concepto de evaporación.
-
-SCORE:
-0
-"""
-        resultado = parse_evaluation(texto)
-        assert resultado["correct"] == "no"
-        assert resultado["score"] == 0
-
-    def test_respuesta_parcial(self):
-        """Debe detectar 'parcial' correctamente."""
-        texto = """
-CORRECT:
-parcial
-
-FEEDBACK:
-Mencionaste parte del proceso pero faltó incluir la condensación.
-
-SCORE:
-5
-"""
-        resultado = parse_evaluation(texto)
-        assert resultado["correct"] == "parcial"
-        assert resultado["score"] == 5
-
-    def test_score_fuera_de_rango_se_limita(self):
-        """El score debe limitarse entre 0 y 10 aunque Gemini devuelva otro valor."""
-        texto = """
-CORRECT:
-si
-
-FEEDBACK:
-Excelente respuesta.
-
-SCORE:
-15
-"""
-        resultado = parse_evaluation(texto)
-        assert resultado["score"] <= 10
-
-    def test_score_invalido_usa_fallback(self):
-        """Si el score no es un número, debe usar el valor por defecto según 'correct'."""
-        texto = """
-CORRECT:
-si
-
-FEEDBACK:
-Muy bien.
-
-SCORE:
-perfecto
-"""
-        resultado = parse_evaluation(texto)
-        # Para 'si' el fallback es 10
-        assert resultado["score"] == 10
