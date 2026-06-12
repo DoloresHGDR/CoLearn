@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useState } from "react";
 import {
@@ -8,15 +9,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getMetrics } from "../services/api";
+import { getClassSummary, getMetrics } from "../services/api";
 import { colors, radius, spacing, typography } from "../styles/theme";
 
-const TREND_CONFIG = {
-  mejorando: { label: "📈 Mejorando", color: colors.success },
-  estable:   { label: "➡️ Estable",   color: colors.warning },
-  bajando:   { label: "📉 Bajando",   color: colors.error },
-  "sin datos": { label: "—", color: colors.textMuted },
-};
+const DIFFICULTY_LABELS = { easy: "Fácil", medium: "Medio", hard: "Difícil" };
+const DIFFICULTY_COLORS = { easy: colors.success, medium: colors.warning, hard: colors.error };
 
 export default function MetricsScreen({ route, navigation }) {
   const { classId, className, joinCode } = route.params;
@@ -24,8 +21,13 @@ export default function MetricsScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
-  useEffect(() => { loadMetrics(); }, []);
+  useEffect(() => {
+    loadMetrics();
+    loadSummary();
+  }, []);
 
   async function loadMetrics() {
     try {
@@ -35,6 +37,18 @@ export default function MetricsScreen({ route, navigation }) {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Resumen generado por IA — se carga solo al entrar (el backend lo cachea)
+  async function loadSummary() {
+    try {
+      const data = await getClassSummary(classId);
+      setSummary(data.summary);
+    } catch (e) {
+      setSummary(null);
+    } finally {
+      setSummaryLoading(false);
     }
   }
 
@@ -66,12 +80,30 @@ export default function MetricsScreen({ route, navigation }) {
         <Text style={styles.codeTip}>{copied ? "Copiado!" : "Toca para copiar"}</Text>
       </TouchableOpacity>
 
+      {/* Resumen de desempeño generado por IA */}
+      <View style={styles.aiCard}>
+        <View style={styles.aiHeader}>
+          <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+          <Text style={styles.aiTitle}>Resumen de la clase</Text>
+        </View>
+        {summaryLoading ? (
+          <View style={styles.aiLoadingRow}>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={styles.aiLoadingText}>Analizando el desempeño...</Text>
+          </View>
+        ) : (
+          <Text style={styles.aiText}>
+            {summary || "No se pudo generar el resumen en este momento."}
+          </Text>
+        )}
+      </View>
+
       {/* Botón a pantalla de preguntas */}
       <TouchableOpacity
         style={styles.questionsButton}
         onPress={() => navigation.navigate("TeacherQuestions", { classId, className })}
       >
-        <Text style={styles.questionsButtonText}>📋 Ver preguntas generadas por la IA</Text>
+        <Text style={styles.questionsButtonText}>Ver preguntas generadas por la IA</Text>
       </TouchableOpacity>
 
       <Text style={styles.title}>Métricas de participación</Text>
@@ -87,7 +119,7 @@ export default function MetricsScreen({ route, navigation }) {
       {/* Alumnos */}
       {metrics.students.length > 0 && (
         metrics.students.map((student) => {
-          const trend = TREND_CONFIG[student.score_trend] || TREND_CONFIG["sin datos"];
+          const diffEntries = Object.entries(student.score_by_difficulty || {});
           return (
             <View key={student.student_id} style={styles.studentCard}>
               <View style={styles.studentHeader}>
@@ -95,13 +127,27 @@ export default function MetricsScreen({ route, navigation }) {
                   <Text style={styles.studentName}>{student.name}</Text>
                   <Text style={styles.studentEmail}>{student.email}</Text>
                 </View>
-                <Text style={[styles.trendBadge, { color: trend.color }]}>{trend.label}</Text>
               </View>
               <View style={styles.statsRow}>
                 <StatChip label="Mensajes" value={student.message_count} />
                 <StatChip label="Respuestas" value={student.answers_submitted} />
                 <StatChip label="Promedio" value={`${student.average_score}/10`} highlight />
               </View>
+              {diffEntries.length > 0 && (
+                <View style={styles.diffRow}>
+                  <Text style={styles.diffTitle}>Puntaje por nivel:</Text>
+                  <View style={styles.diffChips}>
+                    {diffEntries.map(([level, avg]) => (
+                      <View key={level} style={[styles.diffChip, { borderColor: DIFFICULTY_COLORS[level] }]}>
+                        <Text style={[styles.diffChipLabel, { color: DIFFICULTY_COLORS[level] }]}>
+                          {DIFFICULTY_LABELS[level] || level}
+                        </Text>
+                        <Text style={styles.diffChipValue}>{avg}/10</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           );
         })
@@ -111,7 +157,7 @@ export default function MetricsScreen({ route, navigation }) {
       <Text style={styles.title}>Métricas de desarrollador</Text>
       <View style={styles.devSection}>
         <Text style={styles.devSubtitle}>
-          Confiabilidad del evaluador IA — {total} {total === 1 ? "evaluacion registrada" : "evaluaciones registradas"}
+          Distribución de evaluaciones — {total} {total === 1 ? "evaluacion registrada" : "evaluaciones registradas"}
         </Text>
 
         <View style={styles.devGrid}>
@@ -129,8 +175,8 @@ export default function MetricsScreen({ route, navigation }) {
           <Text style={styles.devRowValue}>{total}</Text>
         </View>
         <Text style={styles.devNote}>
-          Basado en Evaluation Framework for AI Tutoring Systems (VanLehn, 2011).
-          La efectividad se mide por la tasa de respuestas correctas y la progresion del puntaje promedio.
+          Distribución de resultados del evaluador IA por categoría (VanLehn, 2011).
+          Permite observar el balance entre respuestas correctas, parciales e incorrectas en la clase.
         </Text>
       </View>
 
@@ -199,6 +245,41 @@ const styles = StyleSheet.create({
   codeLabel: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginBottom: 4 },
   codeValue: { color: colors.white, fontSize: 28, fontWeight: "700", letterSpacing: 3 },
   codeTip: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4 },
+  aiCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  aiHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  aiTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  aiLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  aiLoadingText: {
+    ...typography.muted,
+    fontSize: 13,
+  },
+  aiText: {
+    ...typography.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.text,
+  },
   questionsButton: {
     backgroundColor: colors.white,
     borderRadius: radius.md,
@@ -238,8 +319,13 @@ const styles = StyleSheet.create({
   },
   studentName: { ...typography.subtitle, marginBottom: 2 },
   studentEmail: { ...typography.muted },
-  trendBadge: { fontSize: 12, fontWeight: "600" },
   statsRow: { flexDirection: "row", gap: spacing.sm },
+  diffRow: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  diffTitle: { ...typography.muted, fontSize: 11, marginBottom: spacing.xs },
+  diffChips: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  diffChip: { borderWidth: 1.5, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4, alignItems: "center" },
+  diffChipLabel: { fontSize: 11, fontWeight: "600" },
+  diffChipValue: { fontSize: 13, fontWeight: "700", color: colors.text },
   emptyText: { ...typography.muted, textAlign: "center", marginTop: spacing.xl },
   errorText: { color: colors.error, textAlign: "center", padding: spacing.lg },
   devSection: {

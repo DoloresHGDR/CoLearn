@@ -101,7 +101,7 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Hola, {user?.name?.split(" ")[0]} 👋</Text>
+          <Text style={styles.greeting}>Hola, {user?.name?.split(" ")[0]}</Text>
           <Text style={styles.role}>{isTeacher ? "Docente" : "Alumno"}</Text>
         </View>
         <AppButton

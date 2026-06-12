@@ -7,7 +7,6 @@ import HomeScreen from "../screens/HomeScreen";
 import JoinClassScreen from "../screens/JoinClassScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MetricsScreen from "../screens/MetricsScreen";
-import QuestionsScreen from "../screens/QuestionsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import TeacherQuestionsScreen from "../screens/TeacherQuestionsScreen";
 import { colors } from "../styles/theme";
@@ -35,11 +34,6 @@ export default function AppNavigator() {
           name="Chat"
           component={ChatScreen}
           options={({ route }) => ({ title: route.params?.className || "Chat" })}
-        />
-        <Stack.Screen
-          name="Questions"
-          component={QuestionsScreen}
-          options={{ title: "Preguntas" }}
         />
         <Stack.Screen
           name="Metrics"

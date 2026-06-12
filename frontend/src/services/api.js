@@ -1,7 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 
-// IP local de la PC — debe coincidir con la IP en la red del celular
-export const BASE_URL = "http://192.168.0.111:8000";
+// Puerto del backend (fijo). La IP de la PC se detecta sola.
+const BACKEND_PORT = 8500;
+
+// Deriva la IP automáticamente desde el host de Expo (Metro): el celular ya se
+// conecta a la PC por esa IP, así que la reutilizamos para el backend.
+// Evita tener que editar la IP a mano cada vez que cambia la red.
+function resolveBaseUrl() {
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    Constants.manifest?.debuggerHost ||
+    Constants.manifest2?.extra?.expoGo?.debuggerHost;
+  if (hostUri) {
+    const host = hostUri.split("://").pop().split(":")[0];
+    return `http://${host}:${BACKEND_PORT}`;
+  }
+  // Fallback manual por si Expo no expone el host
+  return `http://192.168.0.111:${BACKEND_PORT}`;
+}
+
+export const BASE_URL = resolveBaseUrl();
 
 // Timeout por defecto — operaciones pesadas (subir archivo, generar con IA) usan TIMEOUT_LONG
 const TIMEOUT_MS = 10000;
@@ -140,20 +159,15 @@ export async function getChatHistory(classId) {
   return get(`/classes/${classId}/chat`);
 }
 
-// --- Preguntas y evaluación ---
-
-export async function getQuestions(classId) {
-  return get(`/classes/${classId}/questions`);
-}
-
-export async function submitAnswer(classId, questionId, answer) {
-  return post(`/classes/${classId}/questions/${questionId}/answer`, { answer });
-}
-
 // --- Métricas ---
 
 export async function getMetrics(classId) {
   return get(`/classes/${classId}/metrics`);
+}
+
+// Resumen de desempeño generado por IA (solo docente)
+export async function getClassSummary(classId) {
+  return get(`/classes/${classId}/summary`);
 }
 
 // Eliminar clase (solo docente — cascade para todos)
@@ -176,19 +190,7 @@ export async function leaveClass(classId) {
   }
 }
 
-// Progreso propio del alumno (para dificultad adaptativa)
-export async function getMyProgress(classId) {
-  return get(`/classes/${classId}/my-progress`);
-}
-
 // Preguntas únicas generadas para la clase (solo docente)
 export async function getTeacherQuestions(classId) {
   return get(`/classes/${classId}/teacher-questions`);
-}
-
-// Devuelve la URL y headers para descargar el archivo de la clase
-export async function getClassFile(classId) {
-  const token = await AsyncStorage.getItem("token");
-  const uri = `${BASE_URL}/classes/${classId}/file`;
-  return { uri, headers: { Authorization: `Bearer ${token}` } };
 }

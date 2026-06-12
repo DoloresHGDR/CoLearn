@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors, radius, spacing, typography } from "../styles/theme";
@@ -26,7 +27,7 @@ export default function ClassCard({ classroom, isTeacher, onPress, onDelete }) {
             <Text style={styles.badgeText}>7mo Primaria</Text>
           </View>
           <TouchableOpacity onPress={handleDeletePress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.deleteIcon}>{isTeacher ? "🗑" : "✕"}</Text>
+            <Ionicons name={isTeacher ? "trash-outline" : "exit-outline"} size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -81,10 +82,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.primary,
     fontWeight: "600",
-  },
-  deleteIcon: {
-    fontSize: 16,
-    color: colors.textMuted,
   },
   code: {
     ...typography.muted,

@@ -111,7 +111,7 @@ export default function CreateClassScreen({ navigation }) {
       <Text style={styles.sectionLabel}>Documento</Text>
       <TouchableOpacity style={styles.filePicker} onPress={pickFile}>
         <Text style={file ? styles.fileSelected : styles.filePlaceholder}>
-          {file ? `📄 ${file.name}` : "Tocá para seleccionar un archivo (PDF, DOCX, TXT)"}
+          {file ? file.name : "Tocá para seleccionar un archivo (PDF, DOCX, TXT)"}
         </Text>
       </TouchableOpacity>
 
