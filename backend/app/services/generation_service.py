@@ -5,25 +5,23 @@ Todas las llamadas a IA usan OpenRouter (GPT-3.5-turbo).
 
 import logging
 
-import requests
 from fastapi import HTTPException
 
-from app.core.config import OPENROUTER_API_KEY
+from app.core.llm import call_openrouter
 
 logger = logging.getLogger(__name__)
 
 
 def generate_activity(level, focuses, context):
     """Genera preguntas educativas sobre el texto usando OpenRouter."""
-    if not OPENROUTER_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY no está configurada.")
-
     focus_text = ", ".join(focuses)
 
-    prompt = f"""Sos un tutor educativo para alumnos de 7mo grado de primaria (12-13 años) en Argentina.
+    prompt = f"""Sos un tutor educativo para UN alumno de 7mo grado de primaria (12-13 años) en Argentina.
+Te dirigís a un solo alumno, en singular y con trato cercano.
 
 IMPORTANTE:
 - Responde SIEMPRE en español
+- La introducción y la reflexión deben hablarle a UN SOLO alumno en singular: NO uses "chicos", "ustedes" ni el plural. Usá "vos" (ej. "hoy vas a...", "prestá atención", "¿qué aprendiste?")
 - Genera EXACTAMENTE 3 preguntas sobre el texto que se te da abajo
 - Las preguntas deben ser sobre el CONTENIDO del texto, no sobre habilidades en abstracto
 - Usa lenguaje claro para preadolescentes de 12-13 años
@@ -59,31 +57,9 @@ REFLECTION:
 """
 
     try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "openai/gpt-3.5-turbo",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.9,
-                "max_tokens": 1024
-            },
-            timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if "error" in data:
-            raise Exception(f"Error de OpenRouter: {data['error']['message']}")
-        if "choices" not in data or not data["choices"]:
-            raise Exception("OpenRouter no devolvio ninguna respuesta valida.")
-
+        content = call_openrouter(prompt, temperature=0.9, max_tokens=1024)
         logger.info("Actividad generada correctamente por OpenRouter")
-        return data["choices"][0]["message"]["content"]
-
+        return content
     except HTTPException:
         raise
     except Exception as e:

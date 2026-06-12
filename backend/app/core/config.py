@@ -9,11 +9,14 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# Modelo de OpenRouter para todas las llamadas a IA (chat, generación, evaluación)
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+
 # Ruta base para archivos de datos (uploads y caché)
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 
-# Ruta de la base de datos
-DATABASE_URL = os.getenv("DATABASE_URL", "colearn.db")
+# Cadena de conexión a PostgreSQL (la define docker-compose; este default es solo para desarrollo local)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://colearn:colearn123@localhost:5433/colearn")
 
 # Configuración de JWT
 SECRET_KEY = os.getenv("SECRET_KEY", "colearn-secret-key-cambiar-en-produccion")
