@@ -90,6 +90,24 @@ def init_db():
             )
         """)
 
+        # Migraciones idempotentes para bases de datos ya creadas.
+        # Cada uno agrega una columna solo si todavía no existe (Postgres).
+        migrations = [
+            "ALTER TABLE classes ADD COLUMN reflection TEXT DEFAULT ''",
+            "ALTER TABLE classes ADD COLUMN introduction TEXT DEFAULT ''",
+            "ALTER TABLE student_answers ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE classes ADD COLUMN summary TEXT DEFAULT ''",
+            "ALTER TABLE classes ADD COLUMN summary_fingerprint TEXT DEFAULT ''",
+            "ALTER TABLE class_enrollments ADD COLUMN practice_index INTEGER DEFAULT NULL",
+        ]
+        for ddl in migrations:
+            cursor.execute(f"""
+                DO $$ BEGIN
+                    {ddl};
+                EXCEPTION WHEN duplicate_column THEN NULL;
+                END $$;
+            """)
+
         conn.commit()
     finally:
         conn.close()
