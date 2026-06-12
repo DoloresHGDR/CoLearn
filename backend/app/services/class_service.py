@@ -76,6 +76,8 @@ async def create_class_service(teacher_id, name, level, focuses, file) -> Create
         level=level,
         focuses=focuses,
         file_path=file_path,
+        introduction=parsed["introduction"],
+        reflection=parsed["reflection"],
         created_at=created_at,
     )
 

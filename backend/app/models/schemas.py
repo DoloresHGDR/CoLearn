@@ -78,20 +78,6 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-# --- Modelos de evaluación de respuestas ---
-
-class AnswerRequest(BaseModel):
-    """Respuesta que envía el alumno a una pregunta."""
-    answer: str
-
-
-class EvaluationResponse(BaseModel):
-    """Resultado de evaluar la respuesta con Gemini."""
-    correct: str       # 'si', 'no' o 'parcial'
-    feedback: str
-    score: int
-
-
 # --- Modelos de métricas del docente ---
 
 class AnswerRecord(BaseModel):
@@ -99,6 +85,7 @@ class AnswerRecord(BaseModel):
     question_id: int
     correct: str
     score: int
+    difficulty: str    # 'easy', 'medium' o 'hard'
     created_at: str
 
 
@@ -110,7 +97,7 @@ class StudentMetrics(BaseModel):
     message_count: int
     answers_submitted: int
     average_score: float
-    score_trend: str       # 'mejorando', 'estable', 'bajando' o 'sin datos'
+    score_by_difficulty: dict  # {'easy': avg, 'medium': avg, 'hard': avg} — niveles sin respuesta se omiten
     answer_history: List[AnswerRecord]
     joined_at: str
 
@@ -123,15 +110,14 @@ class ClassMetrics(BaseModel):
     students: List[StudentMetrics]
 
 
+class ClassSummaryResponse(BaseModel):
+    """Resumen de desempeño de la clase generado por IA (para el docente)."""
+    summary: str
+    generated: bool
+
+
 # Representa una pregunta generada por la IA para una clase
 class Question(BaseModel):
     id: int
     question: str
     difficulty: str
-
-
-class StudentProgress(BaseModel):
-    """Progreso propio del alumno en una clase — usado para dificultad adaptativa."""
-    answers_submitted: int
-    average_score: float
-    recommended_level: str   # 'easy', 'medium' o 'hard' (Mastery Learning — Bloom, 1968)

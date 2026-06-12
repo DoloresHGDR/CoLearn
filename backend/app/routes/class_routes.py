@@ -5,16 +5,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.models.schemas import (
-    AnswerRequest,
     ChatMessage,
     ChatRequest,
     ChatResponse,
     ClassMetrics,
     ClassResponse,
+    ClassSummaryResponse,
     CreateClassResponse,
-    EvaluationResponse,
     JoinClassResponse,
-    StudentProgress,
     UserResponse,
 )
 from app.models.schemas import Question
@@ -28,8 +26,8 @@ from app.services.class_service import (
     list_teacher_classes,
 )
 from app.repositories.class_repository import delete_class, leave_class
-from app.services.evaluation_service import evaluate_student_answer
-from app.services.metrics_service import get_metrics, get_my_progress
+from app.services.metrics_service import get_metrics
+from app.services.summary_service import get_class_summary
 
 router = APIRouter(prefix="/classes", tags=["Clases"])
 
@@ -150,50 +148,6 @@ def chat_history(
     return get_chat_history(class_id=class_id, student_id=current_user.id)
 
 
-# Devuelve las preguntas generadas para una clase
-@router.get("/{class_id}/questions", response_model=List[Question])
-def get_questions(
-    class_id: str,
-    current_user: UserResponse = Depends(get_current_user),
-):
-    rows = get_questions_by_class(class_id)
-    return [
-        Question(id=r["id"], question=r["question"], difficulty=r["difficulty"])
-        for r in rows
-    ]
-
-
-# El alumno responde una pregunta y recibe evaluación de Gemini
-@router.post("/{class_id}/questions/{question_id}/answer", response_model=EvaluationResponse)
-def answer_question(
-    class_id: str,
-    question_id: int,
-    body: AnswerRequest,
-    current_user: UserResponse = Depends(get_current_user),
-):
-    if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Solo los alumnos pueden responder preguntas.")
-
-    return evaluate_student_answer(
-        class_id=class_id,
-        student_id=current_user.id,
-        question_id=question_id,
-        answer=body.answer,
-    )
-
-
-# El alumno consulta su propio progreso para la dificultad adaptativa
-@router.get("/{class_id}/my-progress", response_model=StudentProgress)
-def my_progress(
-    class_id: str,
-    current_user: UserResponse = Depends(get_current_user),
-):
-    if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Solo los alumnos tienen progreso propio.")
-
-    return get_my_progress(class_id=class_id, student_id=current_user.id)
-
-
 # El docente elimina su clase (cascade — se borra para todos)
 @router.delete("/{class_id}", status_code=204)
 def delete_class_route(
@@ -232,3 +186,15 @@ def class_metrics(
         raise HTTPException(status_code=403, detail="Solo los docentes pueden ver las métricas.")
 
     return get_metrics(class_id=class_id, teacher_id=current_user.id)
+
+
+# El docente ve un resumen de desempeño generado por IA (cacheado)
+@router.get("/{class_id}/summary", response_model=ClassSummaryResponse)
+def class_summary(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los docentes pueden ver el resumen.")
+
+    return get_class_summary(class_id=class_id, teacher_id=current_user.id)
