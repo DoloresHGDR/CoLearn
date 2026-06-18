@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
 // Puerto del backend (fijo). La IP de la PC se detecta sola.
-const BACKEND_PORT = 8500;
+const BACKEND_PORT = 8800;
 
 // Deriva la IP automáticamente desde el host de Expo (Metro): el celular ya se
 // conecta a la PC por esa IP, así que la reutilizamos para el backend.
@@ -193,4 +193,21 @@ export async function leaveClass(classId) {
 // Preguntas únicas generadas para la clase (solo docente)
 export async function getTeacherQuestions(classId) {
   return get(`/classes/${classId}/teacher-questions`);
+}
+
+// --- Notificaciones (solo docente) ---
+
+// Lista las notificaciones del docente con el conteo sin leer
+export async function getNotifications() {
+  return get("/classes/notifications");
+}
+
+// Marca todas las notificaciones del docente como leídas
+export async function markNotificationsRead() {
+  const headers = await authHeaders();
+  const res = await fetchWithTimeout(`${BASE_URL}/classes/notifications/read`, { method: "POST", headers });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.detail || "Error al marcar las notificaciones");
+  }
 }

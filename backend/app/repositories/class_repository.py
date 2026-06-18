@@ -133,7 +133,7 @@ def delete_class(class_id):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        for table in ["student_answers", "chat_messages", "class_questions", "class_enrollments"]:
+        for table in ["student_answers", "chat_messages", "class_questions", "class_enrollments", "notifications"]:
             cursor.execute(f"DELETE FROM {table} WHERE class_id = %s", (class_id,))
         cursor.execute("DELETE FROM classes WHERE id = %s", (class_id,))
         conn.commit()
@@ -141,11 +141,20 @@ def delete_class(class_id):
         conn.close()
 
 
-# Elimina la inscripción de un alumno en una clase (sin borrar la clase)
+# Elimina la inscripción de un alumno y todo su progreso en esa clase (sin borrar la clase)
 def leave_class(class_id, student_id):
     conn = get_connection()
     try:
         cursor = conn.cursor()
+        # Borrar el progreso del alumno: respuestas e historial de chat de esta clase
+        cursor.execute(
+            "DELETE FROM student_answers WHERE class_id = %s AND student_id = %s",
+            (class_id, student_id)
+        )
+        cursor.execute(
+            "DELETE FROM chat_messages WHERE class_id = %s AND student_id = %s",
+            (class_id, student_id)
+        )
         cursor.execute(
             "DELETE FROM class_enrollments WHERE class_id = %s AND student_id = %s",
             (class_id, student_id)

@@ -73,6 +73,22 @@ def init_db():
             )
         """)
 
+        # Tabla de notificaciones para el docente (alumno se unió o salió de una clase)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                teacher_id TEXT NOT NULL,
+                class_id TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                student_name TEXT NOT NULL,
+                event_type TEXT NOT NULL CHECK(event_type IN ('join', 'leave')),
+                is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (teacher_id) REFERENCES users(id),
+                FOREIGN KEY (class_id) REFERENCES classes(id)
+            )
+        """)
+
         # Tabla de respuestas de alumnos a preguntas evaluadas por la IA (OpenRouter)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS student_answers (
@@ -86,7 +102,8 @@ def init_db():
                 score INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (class_id) REFERENCES classes(id),
-                FOREIGN KEY (student_id) REFERENCES users(id)
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (question_id) REFERENCES class_questions(id)
             )
         """)
 

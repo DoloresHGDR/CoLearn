@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -26,6 +27,13 @@ from app.services.class_service import (
     list_teacher_classes,
 )
 from app.repositories.class_repository import delete_class, leave_class
+from app.repositories.notification_repository import (
+    count_unread,
+    create_notification,
+    get_notifications_by_teacher,
+    mark_all_read,
+)
+from app.models.schemas import NotificationResponse, NotificationsResponse
 from app.services.metrics_service import get_metrics
 from app.services.summary_service import get_class_summary
 
@@ -173,6 +181,18 @@ def leave_class_route(
 ):
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Solo los alumnos pueden salirse de una clase.")
+    from app.repositories.class_repository import get_class_by_id as _get
+    classroom = _get(class_id)
+    # Notificar al docente que un alumno salió de su clase (antes de borrar la inscripción)
+    if classroom:
+        create_notification(
+            teacher_id=classroom["teacher_id"],
+            class_id=class_id,
+            class_name=classroom["name"],
+            student_name=current_user.name,
+            event_type="leave",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
     leave_class(class_id, current_user.id)
 
 
@@ -186,6 +206,34 @@ def class_metrics(
         raise HTTPException(status_code=403, detail="Solo los docentes pueden ver las métricas.")
 
     return get_metrics(class_id=class_id, teacher_id=current_user.id)
+
+
+# El docente ve sus notificaciones (alumnos que se unieron o salieron de sus clases)
+@router.get("/notifications", response_model=NotificationsResponse)
+def get_notifications(current_user: UserResponse = Depends(get_current_user)):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los docentes tienen notificaciones.")
+    rows = get_notifications_by_teacher(current_user.id)
+    items = [
+        NotificationResponse(
+            id=r["id"],
+            class_name=r["class_name"],
+            student_name=r["student_name"],
+            event_type=r["event_type"],
+            is_read=r["is_read"],
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+    return NotificationsResponse(unread=count_unread(current_user.id), items=items)
+
+
+# El docente marca todas sus notificaciones como leídas
+@router.post("/notifications/read", status_code=204)
+def read_notifications(current_user: UserResponse = Depends(get_current_user)):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los docentes tienen notificaciones.")
+    mark_all_read(current_user.id)
 
 
 # El docente ve un resumen de desempeño generado por IA (cacheado)

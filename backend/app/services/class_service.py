@@ -19,7 +19,9 @@ from app.repositories.class_repository import (
     get_classes_by_teacher,
     is_enrolled,
 )
+from app.repositories.notification_repository import create_notification
 from app.repositories.question_repository import get_questions_by_class, save_question
+from app.repositories.user_repository import get_user_by_id
 from app.services.file_service import save_uploaded_file
 from app.services.generation_service import generate_activity
 from app.services.parser_service import parse_generated_activity
@@ -125,6 +127,17 @@ def join_class_service(student_id, join_code) -> JoinClassResponse:
 
     joined_at = datetime.now(timezone.utc).isoformat()
     enroll_student(class_id=classroom["id"], student_id=student_id, joined_at=joined_at)
+
+    # Notificar al docente que un alumno se unió a su clase
+    student = get_user_by_id(student_id)
+    create_notification(
+        teacher_id=classroom["teacher_id"],
+        class_id=classroom["id"],
+        class_name=classroom["name"],
+        student_name=student["name"] if student else "Un alumno",
+        event_type="join",
+        created_at=joined_at,
+    )
 
     return JoinClassResponse(
         message="Te uniste a la clase correctamente.",

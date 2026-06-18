@@ -121,3 +121,21 @@ class Question(BaseModel):
     id: int
     question: str
     difficulty: str
+
+
+# --- Modelos de notificaciones del docente ---
+
+class NotificationResponse(BaseModel):
+    """Una notificación: un alumno se unió o salió de una clase."""
+    id: int
+    class_name: str
+    student_name: str
+    event_type: str   # 'join' o 'leave'
+    is_read: bool
+    created_at: str
+
+
+class NotificationsResponse(BaseModel):
+    """Lista de notificaciones del docente con el conteo sin leer."""
+    unread: int
+    items: List[NotificationResponse]
