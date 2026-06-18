@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppInput from "../components/AppInput";
+import TopBar from "../components/TopBar";
 import { login } from "../services/api";
-import { colors, spacing, typography } from "../styles/theme";
+import { colors, fontFamily, spacing } from "../styles/theme";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -35,80 +36,45 @@ export default function LoginScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.content}>
-        <Text style={styles.title}>CoLearn</Text>
-        <Text style={styles.subtitle}>Iniciá sesión para continuar</Text>
+    <View style={styles.container}>
+      <TopBar title="Ingresar" onBack={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          <AppInput
+            label="Correo electrónico"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="nombre@institucion.edu.ar"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <AppInput
+            label="Contraseña"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            secureTextEntry
+          />
 
-        <AppInput
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="tu@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <AppInput
-          label="Contraseña"
-          value={password}
-          onChangeText={setPassword}
-          placeholder="••••••••"
-          secureTextEntry
-        />
+          <AppButton title="Ingresar" onPress={handleLogin} loading={loading} style={{ marginTop: spacing.sm }} />
 
-        <AppButton title="Ingresar" onPress={handleLogin} loading={loading} style={styles.button} />
-
-        <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-          <Text style={styles.link}>¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text></Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+          <TouchableOpacity onPress={() => navigation.navigate("Register")} style={{ marginTop: spacing.lg }}>
+            <Text style={styles.link}>
+              ¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text>
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 36,
-    color: colors.primary,
-    marginBottom: spacing.xs,
-    textAlign: "center",
-  },
-  subtitle: {
-    ...typography.muted,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
-  error: {
-    color: colors.error,
-    fontSize: 13,
-    marginBottom: spacing.md,
-    textAlign: "center",
-  },
-  button: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  link: {
-    ...typography.muted,
-    textAlign: "center",
-  },
-  linkBold: {
-    color: colors.primary,
-    fontWeight: "600",
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 20, paddingTop: 24 },
+  error: { color: colors.error, fontFamily: fontFamily.sansRegular, fontSize: 13, marginBottom: spacing.md, textAlign: "center" },
+  link: { textAlign: "center", fontFamily: fontFamily.sansRegular, fontSize: 13.5, color: colors.muted },
+  linkBold: { color: colors.primary, fontFamily: fontFamily.sansSemi },
 });
