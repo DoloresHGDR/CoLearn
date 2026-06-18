@@ -27,7 +27,7 @@ IMPORTANTE:
 - Usa lenguaje claro para preadolescentes de 12-13 años
 - Evita vocabulario tecnico innecesario
 
-Las 3 preguntas deben seguir la Taxonomia de Bloom (Bloom, 1956):
+Las 3 preguntas deben seguir la Taxonomia de Bloom revisada (Anderson y Krathwohl, 2001):
 - QUESTION EASY: apunta a "recordar" o "entender" (niveles 1-2) — recordar datos o explicar conceptos del texto
 - QUESTION MEDIUM: apunta a "aplicar" o "analizar" (niveles 3-4) — usar lo aprendido o comparar ideas del texto
 - QUESTION HARD: apunta a "evaluar" o "crear" (niveles 5-6) — dar una opinion con fundamentos o imaginar un escenario

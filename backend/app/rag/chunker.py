@@ -6,9 +6,12 @@ from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
-# Modelo utilizado para generar embeddings semánticos
+# Modelo multilingüe para generar embeddings semánticos.
+# Se usa la variante multilingüe (50+ idiomas, español incluido) porque los textos de
+# las clases están en español; un modelo solo-inglés recuperaba fragmentos irrelevantes.
+# Misma dimensión (768) que all-mpnet-base-v2, así que el índice FAISS no cambia.
 model = SentenceTransformer(
-    "sentence-transformers/all-mpnet-base-v2"
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 )
 
 

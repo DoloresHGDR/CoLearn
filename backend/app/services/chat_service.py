@@ -43,9 +43,21 @@ from app.services.metrics_service import _recommended_level
 # Máximo de intentos por pregunta antes de avanzar (portón de dominio)
 MAX_ATTEMPTS = 2
 
+# Máximo de pistas por pregunta antes de dar una orientación final y avanzar.
+# Evita que el alumno quede atrapado en un bucle de pistas sin poder progresar
+# (andamiaje acotado: el apoyo es generoso pero finito).
+MAX_HINTS = 3
+
 logger = logging.getLogger(__name__)
 
 HISTORY_LIMIT = 10
+
+# Umbral (en caracteres) para decidir cómo se arma el contexto que ve la IA al evaluar.
+# Texto corto: se pasa entero (rápido y simple). Texto largo: se recuperan solo los
+# fragmentos relevantes con RAG, evitando mandar todo el documento en cada evaluación
+# (menos tokens y menor costo). Con el modelo de embeddings multilingüe la recuperación
+# en español es confiable, así que RAG se usa de verdad en textos extensos.
+FULL_TEXT_CHAR_LIMIT = 3000
 
 
 def _clean(text: str) -> str:
@@ -104,11 +116,29 @@ def _get_next_question(questions, excluded_ids, class_id, student_id):
     return candidates[0]
 
 
-def _generar_pista(question_text, context, student_answer=None) -> str:
-    """Genera una pista breve sin revelar la respuesta. Usada ante 'no sé' o respuesta incorrecta."""
+# Instrucción de escalonado según cuántas pistas ya recibió el alumno.
+# Cada pista es más específica que la anterior (andamiaje progresivo).
+def _nivel_pista(hint_level: int) -> str:
+    if hint_level <= 1:
+        return ("Es la PRIMERA pista: orientá de forma general, indicándole en qué parte "
+                "del texto tiene que fijarse.")
+    if hint_level == 2:
+        return ("Es la SEGUNDA pista: sé más específico, mencioná la idea o la palabra clave "
+                "que tiene que buscar, pero todavía sin dar la respuesta.")
+    return ("Es la TERCERA pista: dale una ayuda fuerte, acercándolo mucho a la respuesta, "
+            "de modo que solo le falte completarla con sus propias palabras.")
+
+
+def _generar_pista(question_text, context, student_answer=None, hint_level=1, previous_hint="") -> str:
+    """Genera una pista escalonada sin revelar la respuesta. Usada ante 'no sé' o respuesta incorrecta."""
     situacion = (
         f'respondió incorrectamente. Su respuesta fue: "{student_answer}"'
         if student_answer else "no sabe cómo responder"
+    )
+    # Evitar repetir la pista anterior para que cada una aporte algo nuevo.
+    evitar = (
+        f'\nYa le diste esta pista antes, NO la repitas y dale una distinta y más útil:\n"{previous_hint}"'
+        if previous_hint else ""
     )
     prompt = f"""Sos un tutor educativo para UN alumno de 7mo grado de primaria (12-13 años) en Argentina.
 Hablás con un solo alumno, en singular.
@@ -121,12 +151,59 @@ Texto de referencia:
 {context[:1200] if context else "[No disponible]"}
 ---
 
+{_nivel_pista(hint_level)}{evitar}
+
 Dale UNA pista breve (1-2 oraciones) que lo oriente hacia la respuesta SIN revelarla.
 Respondé solo la pista, en español, en singular, de manera alentadora. No uses listas ni encabezados."""
     try:
         return _clean(call_openrouter(prompt))
     except Exception:
         return "Revisá con atención la parte del texto que habla de este tema, ahí está la respuesta."
+
+
+def _last_tutor_message(history) -> str:
+    """Devuelve el contenido del último mensaje del tutor (para no repetir pistas)."""
+    return next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
+
+
+def _count_help_since_asked(history, question):
+    """
+    Cuenta cuántas veces el alumno escribió desde que se planteó (o replanteó) esta
+    pregunta. Si la pregunta sigue activa, esos mensajes fueron pedidos de ayuda
+    (una respuesta válida ya la habría cerrado). Sirve para topear las pistas.
+    """
+    snippet = question["question"][:40]
+    last_asked = -1
+    for i, m in enumerate(history):
+        if m["role"] == "assistant" and snippet in m["content"]:
+            last_asked = i
+    if last_asked == -1:
+        return 0
+    return sum(1 for m in history[last_asked + 1:] if m["role"] == "user")
+
+
+def _advance_reply(class_id, student_id, classroom, questions, touched_ids, prefix):
+    """
+    Arma la respuesta que avanza a la siguiente pregunta (o cierra la actividad).
+    `prefix` es el texto inicial (encabezado + feedback, o el mensaje de cierre por pistas).
+    """
+    next_q = _get_next_question(questions, touched_ids, class_id, student_id)
+    reply = prefix
+    if next_q:
+        # Sin etiqueta de dificultad: el alumno no debe saber si es facil o dificil.
+        reply += f"\n\nSiguiente pregunta:\n{next_q['question']}"
+    else:
+        refreshed = get_answers_by_student(class_id, student_id)
+        avg = sum(a["score"] for a in refreshed) / len(refreshed) if refreshed else 0
+        reflection = classroom.get("reflection", "")
+        closing = f"\n\n¡Terminaste todas las preguntas! Tu promedio fue {avg:.1f}/10."
+        if reflection:
+            closing += f"\n\nPara cerrar, una reflexión:\n{reflection}"
+        closing += ("\n\nDesde ahora estás en modo libre y esto ya no afecta tu nota. "
+                    'Podés preguntarme cualquier duda sobre el texto, o escribir "practicar" '
+                    "para volver a intentar las preguntas y desafiarte.")
+        reply += closing
+    return reply
 
 
 def _get_last_asked_question(history, questions):
@@ -169,7 +246,7 @@ def _format_history(messages) -> str:
     )
 
 
-def _procesar_mensaje(question_text, student_answer, context, class_name) -> dict:
+def _procesar_mensaje(question_text, student_answer, context, class_name, difficulty="medium") -> dict:
     """
     Clasifica la intención del mensaje del alumno y, si es una respuesta, la evalúa.
     Una sola llamada al modelo (no agrega costo respecto a solo evaluar).
@@ -179,7 +256,29 @@ def _procesar_mensaje(question_text, student_answer, context, class_name) -> dic
     - si 'respuesta': correct, score, feedback
     - si 'ayuda' o 'fuera_de_tema': mensaje
     """
-    context_block = context[:2500] if context else "[Texto no disponible]"
+    # Guarda de seguridad. El contexto ya viene acotado por quien llama (texto completo
+    # o fragmentos recuperados por RAG), así que este recorte rara vez se aplica.
+    context_block = context[:FULL_TEXT_CHAR_LIMIT] if context else "[Texto no disponible]"
+
+    # Las preguntas difíciles (evaluar/crear, Anderson y Krathwohl 2001) piden una opinión
+    # personal: no hay una respuesta única en el texto, así que se evalúan por fundamentación.
+    if difficulty == "hard":
+        criterio = (
+            "Esta es una pregunta de opinión o reflexión: NO tiene una respuesta única correcta.\n"
+            "- Marcá CORRECTO: si cuando el alumno da una postura clara y la justifica de manera coherente, "
+            "aunque no coincida con el texto.\n"
+            "- Marcá CORRECTO: parcial solo si responde pero no justifica.\n"
+            "- Marcá CORRECTO: no solo si no responde la pregunta o dice algo sin sentido."
+        )
+    else:
+        criterio = (
+            "Compará la respuesta con lo que dice el texto, con criterio amplio (es un chico de 12-13 años):\n"
+            "- Marcá CORRECTO: si cuando la idea principal de la respuesta coincide con el texto, "
+            "aunque le falten detalles, esté mal escrita o use otras palabras.\n"
+            "- Marcá CORRECTO: parcial solo si acierta una parte pero le falta algo importante.\n"
+            "- Marcá CORRECTO: no solo si la respuesta es incorrecta o no tiene que ver con el texto."
+        )
+
     prompt = f"""Sos un tutor educativo para UN alumno de 7mo grado de primaria (12-13 años) en Argentina.
 Hablás con un solo alumno, en singular y con trato cercano.
 
@@ -196,6 +295,9 @@ PASO 1 — Clasificá la intención del mensaje en una sola categoría:
 - AYUDA: pide una pista, dice que no sabe, no entiende, o pide que le expliques
 - FUERA_DE_TEMA: quiere hablar de otra cosa que no tiene que ver con el texto
 
+Cómo evaluar si es una respuesta:
+{criterio}
+
 Reglas:
 - Respondé SIEMPRE en español y en singular
 - Si dudás entre RESPUESTA y AYUDA, elegí AYUDA
@@ -207,7 +309,7 @@ INTENCION: respuesta / ayuda / fuera_de_tema
 Si la intención es "respuesta", agregá:
 CORRECTO: si / parcial / no
 PUNTAJE: [número del 0 al 10]
-FEEDBACK: [1-2 oraciones alentadoras]
+FEEDBACK: [1-2 oraciones. Si CORRECTO es "si", felicitá y NO menciones nada que falte. Si es "parcial", reconocé lo que está bien y sugerí con suavidad qué completar. Si es "no", alentá a intentarlo de nuevo.]
 
 Si la intención es "ayuda", agregá:
 MENSAJE: [una pista breve que oriente sin revelar la respuesta]
@@ -345,8 +447,31 @@ def send_message(class_id, student_id, message) -> ChatResponse:
 
             # Pide ayuda o se va de tema → responder sin avanzar
             if resultado["intencion"] in ("ayuda", "fuera_de_tema"):
-                _save_pair(class_id, student_id, message, resultado["mensaje"])
-                return ChatResponse(reply=resultado["mensaje"])
+                # Mismo tope que en la evaluación: no dejar al alumno en bucle de pistas.
+                if (resultado["intencion"] == "ayuda"
+                        and _count_help_since_asked(history, current_q) >= MAX_HINTS):
+                    hint = _generar_pista(current_q["question"], rag_context, student_answer=None,
+                                          hint_level=MAX_HINTS, previous_hint=_last_tutor_message(history))
+                    next_index = practice_index + 1
+                    reply = "Esta te costó, ¡no pasa nada! " + hint
+                    if next_index < len(questions):
+                        set_practice_index(class_id, student_id, next_index)
+                        reply += f"\n\nSigamos con la próxima:\n{questions[next_index]['question']}"
+                    else:
+                        set_practice_index(class_id, student_id, None)
+                        reply += '\n\n¡Terminaste la práctica! No afectó tu nota. Escribí "practicar" para repasar de nuevo.'
+                    _save_pair(class_id, student_id, message, reply)
+                    return ChatResponse(reply=reply)
+
+                # Pista escalonada también en práctica
+                if resultado["intencion"] == "ayuda":
+                    hint_level = _count_help_since_asked(history, current_q) + 1
+                    respuesta = _generar_pista(current_q["question"], rag_context, student_answer=None,
+                                               hint_level=hint_level, previous_hint=_last_tutor_message(history))
+                else:
+                    respuesta = resultado["mensaje"]
+                _save_pair(class_id, student_id, message, respuesta)
+                return ChatResponse(reply=respuesta)
 
             # Es una respuesta → feedback (sin guardar ni portón) y avanzar a la siguiente
             next_index = practice_index + 1
@@ -399,19 +524,67 @@ def send_message(class_id, student_id, message) -> ChatResponse:
 
         if not cached:
             logger.warning(f"Caché RAG no disponible para clase {class_id} — evaluando sin contexto")
-        rag_context = search_context(
-            question=active_question["question"],
-            chunks=cached["chunks"],
-            index=cached["index"],
-            model=embedding_model
-        ) if cached else ""
+        # Decisión de contexto para evaluar:
+        # - Texto corto (entra completo): se pasa entero, es más preciso.
+        # - Texto largo (supera el umbral): se recuperan los fragmentos relevantes con RAG.
+        if not cached:
+            rag_context = ""
+        elif len(cached["text"]) <= FULL_TEXT_CHAR_LIMIT:
+            rag_context = cached["text"]
+            logger.info(f"Evaluación con texto completo ({len(cached['text'])} chars, bajo el umbral)")
+        else:
+            rag_context = search_context(
+                question=active_question["question"],
+                chunks=cached["chunks"],
+                index=cached["index"],
+                model=embedding_model,
+            )
+            logger.info(f"Evaluación con RAG: texto largo ({len(cached['text'])} chars), recuperando fragmentos")
 
-        resultado = _procesar_mensaje(active_question["question"], message, rag_context, class_name)
+        resultado = _procesar_mensaje(
+            active_question["question"], message, rag_context, class_name,
+            difficulty=active_question.get("difficulty", "medium"),
+        )
 
         # El alumno pide ayuda o se va de tema → responder sin consumir intento ni avanzar
         if resultado["intencion"] in ("ayuda", "fuera_de_tema"):
-            _save_pair(class_id, student_id, message, resultado["mensaje"])
-            return ChatResponse(reply=resultado["mensaje"])
+            # Andamiaje acotado: si ya pidió ayuda demasiadas veces sobre esta pregunta,
+            # no lo dejamos en un bucle de pistas. Le damos una orientación final y avanzamos
+            # (la pregunta queda cerrada; podrá reintentarla en modo práctica más tarde).
+            if (resultado["intencion"] == "ayuda"
+                    and _count_help_since_asked(history, active_question) >= MAX_HINTS):
+                now = datetime.now(timezone.utc).isoformat()
+                cierre_feedback = "Necesitó varias pistas; avanzamos para no frenar el ritmo."
+                if is_retry:
+                    update_student_answer(
+                        class_id=class_id, student_id=student_id, question_id=active_question["id"],
+                        answer=message, correct="no", feedback=cierre_feedback,
+                        score=2, attempts=prev["attempts"] + 1,
+                    )
+                else:
+                    save_student_answer(
+                        class_id=class_id, student_id=student_id, question_id=active_question["id"],
+                        answer=message, correct="no", feedback=cierre_feedback,
+                        score=2, created_at=now, attempts=MAX_ATTEMPTS,
+                    )
+                touched_ids.add(active_question["id"])
+                hint = _generar_pista(active_question["question"], rag_context, student_answer=None,
+                                      hint_level=MAX_HINTS, previous_hint=_last_tutor_message(history))
+                prefix = ("Esta pregunta te costó y está perfecto pedir ayuda. " + hint +
+                          ' Sigamos avanzando; más tarde podés volver a intentarla escribiendo "practicar".')
+                reply = _advance_reply(class_id, student_id, classroom, questions, touched_ids, prefix)
+                _save_pair(class_id, student_id, message, reply)
+                return ChatResponse(reply=reply)
+
+            # Pista escalonada: más específica que las anteriores y sin repetirlas.
+            if resultado["intencion"] == "ayuda":
+                hint_level = _count_help_since_asked(history, active_question) + 1
+                respuesta = _generar_pista(active_question["question"], rag_context, student_answer=None,
+                                           hint_level=hint_level, previous_hint=_last_tutor_message(history))
+            else:
+                respuesta = resultado["mensaje"]
+            _save_pair(class_id, student_id, message, respuesta)
+            return ChatResponse(reply=respuesta)
 
         # Intención = respuesta → evaluar con el portón de dominio
         now = datetime.now(timezone.utc).isoformat()
@@ -447,23 +620,17 @@ def send_message(class_id, student_id, message) -> ChatResponse:
             )
 
         touched_ids.add(active_question["id"])
-        next_q = _get_next_question(questions, touched_ids, class_id, student_id)
-        reply = resultado["feedback"]
 
-        if next_q:
-            # Sin etiqueta de dificultad: el alumno no debe saber si es facil o dificil.
-            reply += f"\n\nSiguiente pregunta:\n{next_q['question']}"
-        else:
-            refreshed = get_answers_by_student(class_id, student_id)
-            avg = sum(a["score"] for a in refreshed) / len(refreshed) if refreshed else 0
-            reflection = classroom.get("reflection", "")
-            closing = f"\n\n¡Terminaste todas las preguntas! Tu promedio fue {avg:.1f}/10."
-            if reflection:
-                closing += f"\n\nPara cerrar, una reflexión:\n{reflection}"
-            closing += ("\n\nDesde ahora estás en modo libre y esto ya no afecta tu nota. "
-                        'Podés preguntarme cualquier duda sobre el texto, o escribir "practicar" '
-                        "para volver a intentar las preguntas y desafiarte.")
-            reply += closing
+        # Encabezado claro según el resultado, para que el alumno sepa si estuvo bien.
+        encabezado = {
+            "si": "¡Muy bien! Respuesta correcta. ",
+            "parcial": "¡Bien! Vas por buen camino. ",
+            "no": "Cerramos esta pregunta. ",
+        }.get(resultado["correct"], "")
+        reply = _advance_reply(
+            class_id, student_id, classroom, questions, touched_ids,
+            encabezado + resultado["feedback"],
+        )
 
         _save_pair(class_id, student_id, message, reply)
         return ChatResponse(reply=reply)
