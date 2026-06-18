@@ -1,105 +1,72 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { colors, radius, spacing, typography } from "../styles/theme";
+import { colors, fontFamily, radius } from "../styles/theme";
 
-export default function ClassCard({ classroom, isTeacher, onPress, onDelete }) {
+// Colores de ícono alternados según la posición de la card
+const ACCENTS = [
+  { bg: colors.primarySoft, fg: colors.primary },
+  { bg: colors.accentSoft, fg: colors.accent },
+];
+
+export default function ClassCard({ classroom, isTeacher, index = 0, onPress, onDelete }) {
+  const accent = ACCENTS[index % ACCENTS.length];
+  const focusText = Array.isArray(classroom.focuses) ? classroom.focuses.join(" · ") : "";
 
   function handleDeletePress() {
     const title = isTeacher ? "Eliminar clase" : "Salir de la clase";
     const message = isTeacher
-      ? `¿Estás seguro que querés eliminar "${classroom.name}"? Se borrará para todos los alumnos.`
-      : `¿Querés salir de "${classroom.name}"? Perderás tu progreso.`;
-    const action = isTeacher ? "Eliminar" : "Salir";
-
+      ? `¿Eliminar "${classroom.name}"? Se borra para todos los alumnos.`
+      : `¿Salir de "${classroom.name}"? Perdés tu progreso.`;
     Alert.alert(title, message, [
       { text: "Cancelar", style: "cancel" },
-      { text: action, style: "destructive", onPress: onDelete },
+      { text: isTeacher ? "Eliminar" : "Salir", style: "destructive", onPress: onDelete },
     ]);
   }
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.header}>
-        <Text style={styles.name} numberOfLines={1}>{classroom.name}</Text>
-        <View style={styles.headerRight}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>7mo Primaria</Text>
-          </View>
-          <TouchableOpacity onPress={handleDeletePress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={isTeacher ? "trash-outline" : "exit-outline"} size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.icon, { backgroundColor: accent.bg }]}>
+        <Ionicons name="book-outline" size={22} color={accent.fg} />
       </View>
 
-      <Text style={styles.code}>Código: {classroom.join_code}</Text>
-      <Text style={styles.focuses} numberOfLines={1}>
-        {classroom.focuses.join(" · ")}
-      </Text>
-      <Text style={styles.action}>
-        {isTeacher ? "Ver métricas y preguntas →" : "Entrar a la clase →"}
-      </Text>
+      <View style={styles.body}>
+        <Text style={styles.name} numberOfLines={1}>{classroom.name}</Text>
+        <View style={styles.metaRow}>
+          <Text style={[styles.badge, { color: accent.fg }]}>7.º grado</Text>
+          {focusText ? <View style={styles.dot} /> : null}
+          {focusText ? <Text style={styles.focus} numberOfLines={1}>{focusText}</Text> : null}
+        </View>
+        <Text style={styles.action} numberOfLines={1}>
+          {isTeacher ? `Código   ${classroom.join_code}` : "Entrar a la clase   →"}
+        </Text>
+      </View>
+
+      <TouchableOpacity onPress={handleDeletePress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={styles.del}>
+        <Ionicons name={isTeacher ? "trash-outline" : "exit-outline"} size={18} color={colors.faint} />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: radius.card,
+    padding: 16,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.xs,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  name: {
-    ...typography.subtitle,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  badge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  badgeText: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  code: {
-    ...typography.muted,
-    marginBottom: spacing.xs,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-  },
-  focuses: {
-    ...typography.muted,
-    marginBottom: spacing.sm,
-  },
-  action: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: "600",
-    marginTop: spacing.xs,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  icon: { width: 46, height: 46, borderRadius: radius.icon, alignItems: "center", justifyContent: "center" },
+  body: { flex: 1, minWidth: 0, gap: 7 },
+  name: { fontFamily: fontFamily.serifSemi, fontSize: 15.5, color: colors.ink, lineHeight: 20 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  badge: { fontFamily: fontFamily.sansBold, fontSize: 11, letterSpacing: 0.3, textTransform: "uppercase" },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.faint },
+  focus: { flex: 1, fontFamily: fontFamily.sansRegular, fontSize: 12.5, color: colors.muted },
+  action: { fontFamily: fontFamily.sansSemi, fontSize: 12.5, color: colors.primary },
+  del: { padding: 2 },
 });

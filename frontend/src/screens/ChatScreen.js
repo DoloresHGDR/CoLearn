@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -16,10 +17,46 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import OwlMascot from "../components/OwlMascot";
+import TopBar from "../components/TopBar";
 import { BASE_URL, getChatHistory, sendMessage } from "../services/api";
-import { colors, radius, spacing, typography } from "../styles/theme";
+import { colors, fontFamily } from "../styles/theme";
 
-export default function ChatScreen({ route }) {
+// Punto que sube y baja con retraso escalonado (animacion "pensando").
+function ThinkingDot({ delay }) {
+  const bounce = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(bounce, { toValue: -5, duration: 300, useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 0,  duration: 300, useNativeDriver: true }),
+        Animated.delay(600 - delay),
+      ])
+    ).start();
+  }, [bounce, delay]);
+  return <Animated.View style={[styles.dot, { transform: [{ translateY: bounce }] }]} />;
+}
+
+function ThinkingBubble() {
+  return (
+    <View style={styles.aiRow}>
+      <View style={styles.avatarSlot}>
+        <OwlMascot size={30} animated />
+      </View>
+      <View>
+        <Text style={styles.aiLabel}>Tutor IA</Text>
+        <View style={[styles.aiBubble, styles.thinkBubble]}>
+          <ThinkingDot delay={0} />
+          <ThinkingDot delay={200} />
+          <ThinkingDot delay={400} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function ChatScreen({ route, navigation }) {
   const { classId, className } = route.params;
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
@@ -29,15 +66,12 @@ export default function ChatScreen({ route }) {
   const [downloadingFile, setDownloadingFile] = useState(false);
   const flatListRef = useRef(null);
 
-  useEffect(() => {
-    initChat();
-  }, []);
+  useEffect(() => { initChat(); }, []);
 
   async function initChat() {
     try {
       const history = await getChatHistory(classId);
       if (history.length === 0) {
-        // Chat vacío → pedir intro al backend
         setSending(true);
         const data = await sendMessage(classId, "__init__");
         setMessages([{ role: "assistant", content: data.reply, created_at: new Date().toISOString() }]);
@@ -45,10 +79,9 @@ export default function ChatScreen({ route }) {
         setMessages(history);
       }
     } catch (e) {
-      // Si falla la intro, mostrar mensaje de bienvenida básico
       setMessages([{
         role: "assistant",
-        content: "Hola! Cuando estes listo para empezar, escribime y comenzamos con las preguntas.",
+        content: "Hola! Cuando estés listo para empezar, escribime y comenzamos con las preguntas.",
         created_at: new Date().toISOString(),
       }]);
     } finally {
@@ -60,47 +93,33 @@ export default function ChatScreen({ route }) {
   async function handleSend() {
     const text = input.trim();
     if (!text || sending) return;
-
-    const userMsg = { role: "user", content: text, created_at: new Date().toISOString() };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { role: "user", content: text, created_at: new Date().toISOString() }]);
     setInput("");
     setSending(true);
-
     try {
       const data = await sendMessage(classId, text);
-      const aiMsg = { role: "assistant", content: data.reply, created_at: new Date().toISOString() };
-      setMessages((prev) => [...prev, aiMsg]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, created_at: new Date().toISOString() }]);
     } catch (e) {
-      const errMsg = {
+      setMessages((prev) => [...prev, {
         role: "assistant",
         content: "Hubo un error al contactar al tutor. Intentá de nuevo.",
         created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      }]);
     } finally {
       setSending(false);
     }
   }
 
-  // Descarga el archivo con autenticación y lo abre con la app preferida
   async function handleVerTexto() {
     setDownloadingFile(true);
     try {
       const token = await AsyncStorage.getItem("token");
       const url = `${BASE_URL}/classes/${classId}/file`;
-
-      // Primero hacer HEAD para obtener el nombre real del archivo
-      const headRes = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      const headRes = await fetch(url, { method: "GET", headers: { Authorization: `Bearer ${token}` } });
       if (!headRes.ok) {
         Alert.alert("Error", "El archivo no está disponible en el servidor.");
         return;
       }
-
-      // Obtener extensión del Content-Type o Content-Disposition
       const contentType = headRes.headers.get("content-type") || "";
       const disposition = headRes.headers.get("content-disposition") || "";
       let ext = ".pdf";
@@ -108,14 +127,8 @@ export default function ChatScreen({ route }) {
       else if (disposition.includes(".txt")) ext = ".txt";
       else if (contentType.includes("word")) ext = ".docx";
       else if (contentType.includes("text")) ext = ".txt";
-
       const localUri = FileSystem.documentDirectory + `texto_clase${ext}`;
-
-      // Descargar con autenticación
-      const result = await FileSystem.downloadAsync(url, localUri, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      const result = await FileSystem.downloadAsync(url, localUri, { headers: { Authorization: `Bearer ${token}` } });
       if (result.status === 200) {
         await Sharing.shareAsync(result.uri, { mimeType: contentType || "application/pdf" });
       } else {
@@ -128,48 +141,57 @@ export default function ChatScreen({ route }) {
     }
   }
 
-  function renderMessage({ item }) {
+  function renderMessage({ item, index }) {
     const isUser = item.role === "user";
+    if (isUser) {
+      return (
+        <View style={styles.userWrap}>
+          <View style={styles.userBubble}>
+            <Text style={styles.userText}>{item.content}</Text>
+          </View>
+        </View>
+      );
+    }
+    const prev = messages[index - 1];
+    const showAvatar = !prev || prev.role === "user";
     return (
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAI]}>
-        {!isUser && <Text style={styles.aiLabel}>Tutor IA</Text>}
-        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
-          {item.content}
-        </Text>
+      <View style={styles.aiRow}>
+        <View style={styles.avatarSlot}>{showAvatar ? <OwlMascot size={30} /> : null}</View>
+        <View style={{ flex: 1 }}>
+          {showAvatar ? <Text style={styles.aiLabel}>Tutor IA</Text> : null}
+          <View style={styles.aiBubble}>
+            <Text style={styles.aiText}>{item.content}</Text>
+          </View>
+        </View>
       </View>
     );
   }
 
+  const textoChip = (
+    <TouchableOpacity onPress={handleVerTexto} disabled={downloadingFile} style={styles.textoChip}>
+      {downloadingFile ? (
+        <ActivityIndicator color="#fff" size="small" />
+      ) : (
+        <>
+          <Ionicons name="document-text-outline" size={15} color={colors.accent} />
+          <Text style={styles.textoChipText}>Texto</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={styles.container}>
+        <TopBar title={className} subtitle="Tutor de comprensión lectora" onBack={() => navigation.goBack()} dark right={textoChip} />
+        <View style={styles.centered}><ActivityIndicator color={colors.primary} /></View>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
-      {/* Botón "Ver texto" en la parte superior */}
-      <TouchableOpacity
-        style={styles.verTextoBar}
-        onPress={handleVerTexto}
-        disabled={downloadingFile}
-      >
-        {downloadingFile
-          ? <ActivityIndicator color={colors.primary} size="small" />
-          : (
-            <View style={styles.verTextoContent}>
-              <Ionicons name="document-text-outline" size={16} color={colors.primary} />
-              <Text style={styles.verTextoText}>Ver texto de la clase</Text>
-            </View>
-          )
-        }
-      </TouchableOpacity>
+    <KeyboardAvoidingView style={styles.container} behavior="padding" keyboardVerticalOffset={0}>
+      <TopBar title={className} subtitle="Tutor de comprensión lectora" onBack={() => navigation.goBack()} dark right={textoChip} />
 
       <FlatList
         ref={flatListRef}
@@ -178,28 +200,28 @@ export default function ChatScreen({ route }) {
         renderItem={renderMessage}
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        ListFooterComponent={sending ? <ThinkingBubble /> : null}
       />
 
-      <View style={[styles.inputRow, { paddingBottom: spacing.md + insets.bottom }]}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Escribí tu respuesta..."
-          placeholderTextColor={colors.textMuted}
-          multiline
-          maxLength={500}
-          editable={!sending}
-        />
+      <View style={[styles.inputRow, { paddingBottom: 14 + insets.bottom }]}>
+        <View style={styles.inputBox}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Escribí tu respuesta…"
+            placeholderTextColor={colors.faint}
+            multiline
+            maxLength={500}
+            editable={!sending}
+          />
+        </View>
         <TouchableOpacity
-          style={[styles.sendButton, (!input.trim() || sending) && styles.sendButtonDisabled]}
+          style={[styles.sendBtn, (!input.trim() || sending) && { opacity: 0.5 }]}
           onPress={handleSend}
           disabled={!input.trim() || sending}
         >
-          {sending
-            ? <ActivityIndicator color={colors.white} size="small" />
-            : <Ionicons name="send" size={18} color={colors.white} />
-          }
+          {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={18} color="#fff" />}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -207,83 +229,23 @@ export default function ChatScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  verTextoBar: {
-    backgroundColor: colors.white,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    alignItems: "center",
-  },
-  verTextoContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  verTextoText: {
-    color: colors.primary,
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  messageList: {
-    padding: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  bubble: {
-    maxWidth: "80%",
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  bubbleUser: {
-    backgroundColor: colors.primary,
-    alignSelf: "flex-end",
-    borderBottomRightRadius: 4,
-  },
-  bubbleAI: {
-    backgroundColor: colors.white,
-    alignSelf: "flex-start",
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  aiLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  bubbleText: { ...typography.body, lineHeight: 20 },
-  bubbleTextUser: { color: colors.white },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    padding: spacing.md,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendButtonDisabled: { backgroundColor: colors.border },
+  textoChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 11, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.16)" },
+  textoChipText: { fontFamily: fontFamily.sansSemi, fontSize: 12.5, color: "#fff" },
+  messageList: { padding: 16, paddingBottom: 12, gap: 14 },
+  aiRow: { flexDirection: "row", gap: 9, alignItems: "flex-end", maxWidth: "88%" },
+  avatarSlot: { width: 30 },
+  aiLabel: { fontFamily: fontFamily.sansBold, fontSize: 11.5, color: colors.primary, marginBottom: 5 },
+  aiBubble: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 18, borderTopLeftRadius: 4, paddingVertical: 11, paddingHorizontal: 14 },
+  aiText: { fontFamily: fontFamily.sansRegular, fontSize: 14, lineHeight: 21, color: colors.ink },
+  userWrap: { alignItems: "flex-end" },
+  userBubble: { maxWidth: "82%", backgroundColor: colors.primary, borderRadius: 18, borderTopRightRadius: 4, paddingVertical: 11, paddingHorizontal: 14 },
+  userText: { fontFamily: fontFamily.sansRegular, fontSize: 14, lineHeight: 21, color: "#fff" },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 14, paddingTop: 10, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line },
+  inputBox: { flex: 1, minHeight: 46, maxHeight: 110, borderRadius: 23, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, justifyContent: "center", paddingHorizontal: 18 },
+  input: { fontFamily: fontFamily.sansRegular, fontSize: 14, color: colors.ink, paddingVertical: Platform.OS === "ios" ? 12 : 8 },
+  sendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", shadowColor: colors.accent, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.33, shadowRadius: 12, elevation: 4 },
+  thinkBubble: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 14 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.faint },
 });

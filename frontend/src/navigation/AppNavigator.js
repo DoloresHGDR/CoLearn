@@ -9,42 +9,24 @@ import LoginScreen from "../screens/LoginScreen";
 import MetricsScreen from "../screens/MetricsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import TeacherQuestionsScreen from "../screens/TeacherQuestionsScreen";
-import { colors } from "../styles/theme";
+import WelcomeScreen from "../screens/WelcomeScreen";
 
 const Stack = createStackNavigator();
 
-// Opciones de cabecera compartidas
-const headerOptions = {
-  headerStyle: { backgroundColor: colors.white },
-  headerTintColor: colors.primary,
-  headerTitleStyle: { fontWeight: "700", color: colors.text },
-  headerBackTitleVisible: false,
-};
-
+// Todas las pantallas usan TopBar custom, sin header nativo.
 export default function AppNavigator() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login" screenOptions={headerOptions}>
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "Registro" }} />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: "CoLearn", headerLeft: null }} />
-        <Stack.Screen name="CreateClass" component={CreateClassScreen} options={{ title: "Nueva clase" }} />
-        <Stack.Screen name="JoinClass" component={JoinClassScreen} options={{ title: "Unirse a clase" }} />
-        <Stack.Screen
-          name="Chat"
-          component={ChatScreen}
-          options={({ route }) => ({ title: route.params?.className || "Chat" })}
-        />
-        <Stack.Screen
-          name="Metrics"
-          component={MetricsScreen}
-          options={({ route }) => ({ title: route.params?.className || "Métricas" })}
-        />
-        <Stack.Screen
-          name="TeacherQuestions"
-          component={TeacherQuestionsScreen}
-          options={{ title: "Preguntas de la IA" }}
-        />
+      <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="CreateClass" component={CreateClassScreen} />
+        <Stack.Screen name="JoinClass" component={JoinClassScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="Metrics" component={MetricsScreen} />
+        <Stack.Screen name="TeacherQuestions" component={TeacherQuestionsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
