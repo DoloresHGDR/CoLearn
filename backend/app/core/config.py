@@ -22,5 +22,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://colearn:colearn123@localh
 SECRET_KEY = os.getenv("SECRET_KEY", "colearn-secret-key-cambiar-en-produccion")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
+# Validación de correo institucional en el registro.
+# El dominio del correo debe empezar con el prefijo del rol y terminar con el sufijo institucional.
+# Ej: docente -> nombre@docente(...).edu.ar  ·  alumno -> nombre@alumno(...).edu.ar
+INSTITUTIONAL_EMAIL_SUFFIX = os.getenv("INSTITUTIONAL_EMAIL_SUFFIX", ".edu.ar")
+ROLE_EMAIL_PREFIX = {"student": "alumno.", "teacher": "docente."}
+
 if not OPENROUTER_API_KEY:
     logger.warning("OPENROUTER_API_KEY no está configurada en .env")

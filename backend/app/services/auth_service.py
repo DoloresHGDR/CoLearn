@@ -14,6 +14,7 @@ from app.core.auth import (
     hash_password,
     verify_password,
 )
+from app.core.config import INSTITUTIONAL_EMAIL_SUFFIX, ROLE_EMAIL_PREFIX
 from app.models.schemas import TokenResponse, UserRegister, UserResponse
 from app.repositories.user_repository import (
     create_user,
@@ -34,6 +35,15 @@ def register_user(data: UserRegister) -> UserResponse:
         raise HTTPException(
             status_code=400,
             detail="El rol debe ser 'teacher' o 'student'."
+        )
+
+    # Verificar que el correo corresponda exactamente al dominio institucional del rol
+    domain = data.email.split("@")[-1].lower()
+    expected = f"{ROLE_EMAIL_PREFIX.get(data.role, '')}{INSTITUTIONAL_EMAIL_SUFFIX.lstrip('.')}"
+    if domain != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El correo debe ser institucional y corresponder a tu rol (por ejemplo, nombre@{expected}).",
         )
 
     # Verificar que el email no esté en uso
