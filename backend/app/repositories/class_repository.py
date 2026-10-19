@@ -133,7 +133,7 @@ def delete_class(class_id):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        for table in ["student_answers", "chat_messages", "class_questions", "class_enrollments", "notifications"]:
+        for table in ["student_answers", "chat_messages", "class_questions", "class_enrollments", "notifications", "class_feedback"]:
             cursor.execute(f"DELETE FROM {table} WHERE class_id = %s", (class_id,))
         cursor.execute("DELETE FROM classes WHERE id = %s", (class_id,))
         conn.commit()

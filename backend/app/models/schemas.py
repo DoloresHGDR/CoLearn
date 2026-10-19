@@ -73,9 +73,21 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class FeedbackRequest(BaseModel):
+    """Voto del alumno sobre si la ayuda del tutor le resultó clara/útil."""
+    helpful: bool
+
+
 class ChatResponse(BaseModel):
     """Respuesta de la IA al alumno."""
     reply: str
+
+
+class ProgressResponse(BaseModel):
+    """Avance del alumno en la actividad: preguntas cerradas sobre el total."""
+    answered: int
+    total: int
+    current_question: str | None = None  # pregunta activa (para mostrarla fija en el chat)
 
 
 # --- Modelos de métricas del docente ---
@@ -108,6 +120,8 @@ class ClassMetrics(BaseModel):
     class_name: str
     enrolled_count: int
     students: List[StudentMetrics]
+    feedback_total: int = 0      # cuántos alumnos votaron sobre la utilidad del tutor
+    feedback_positive: int = 0   # cuántos de ellos la encontraron clara/útil
 
 
 class ClassSummaryResponse(BaseModel):

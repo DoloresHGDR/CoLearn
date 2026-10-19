@@ -43,10 +43,11 @@ from app.services.metrics_service import _recommended_level
 # Máximo de intentos por pregunta antes de avanzar (portón de dominio)
 MAX_ATTEMPTS = 2
 
-# Máximo de pistas por pregunta antes de dar una orientación final y avanzar.
-# Evita que el alumno quede atrapado en un bucle de pistas sin poder progresar
-# (andamiaje acotado: el apoyo es generoso pero finito).
-MAX_HINTS = 3
+# Pistas A PEDIDO (cuando el alumno dice "no sé" sin intentar). El portón de dominio
+# da su propia pista al equivocarse y NO se cuenta acá.
+# Una sola pista por pregunta: si vuelve a pedir ayuda en la misma pregunta, se cierra
+# como no resuelta. Evita guiarlo hasta la respuesta (andamiaje finito, Wood, Bruner y Ross, 1976).
+MAX_HINTS_PER_QUESTION = 1
 
 logger = logging.getLogger(__name__)
 
@@ -449,9 +450,9 @@ def send_message(class_id, student_id, message) -> ChatResponse:
             if resultado["intencion"] in ("ayuda", "fuera_de_tema"):
                 # Mismo tope que en la evaluación: no dejar al alumno en bucle de pistas.
                 if (resultado["intencion"] == "ayuda"
-                        and _count_help_since_asked(history, current_q) >= MAX_HINTS):
+                        and _count_help_since_asked(history, current_q) >= MAX_HINTS_PER_QUESTION):
                     hint = _generar_pista(current_q["question"], rag_context, student_answer=None,
-                                          hint_level=MAX_HINTS, previous_hint=_last_tutor_message(history))
+                                          hint_level=MAX_HINTS_PER_QUESTION, previous_hint=_last_tutor_message(history))
                     next_index = practice_index + 1
                     reply = "Esta te costó, ¡no pasa nada! " + hint
                     if next_index < len(questions):
@@ -548,13 +549,18 @@ def send_message(class_id, student_id, message) -> ChatResponse:
 
         # El alumno pide ayuda o se va de tema → responder sin consumir intento ni avanzar
         if resultado["intencion"] in ("ayuda", "fuera_de_tema"):
-            # Andamiaje acotado: si ya pidió ayuda demasiadas veces sobre esta pregunta,
-            # no lo dejamos en un bucle de pistas. Le damos una orientación final y avanzamos
-            # (la pregunta queda cerrada; podrá reintentarla en modo práctica más tarde).
-            if (resultado["intencion"] == "ayuda"
-                    and _count_help_since_asked(history, active_question) >= MAX_HINTS):
+            # Fuera de tema: recordatorio amable, no consume pistas ni intentos.
+            if resultado["intencion"] == "fuera_de_tema":
+                respuesta = resultado["mensaje"]
+                _save_pair(class_id, student_id, message, respuesta)
+                return ChatResponse(reply=respuesta)
+
+            # Pedido de ayuda: una sola pista por pregunta. Si ya recibió la pista de esta
+            # pregunta y vuelve a pedir, se cierra como no resuelta. El portón de dominio
+            # (pista al responder mal) es aparte y no cuenta acá.
+            if _count_help_since_asked(history, active_question) >= MAX_HINTS_PER_QUESTION:
                 now = datetime.now(timezone.utc).isoformat()
-                cierre_feedback = "Necesitó varias pistas; avanzamos para no frenar el ritmo."
+                cierre_feedback = "Cerramos esta pregunta sin resolver; se puede reintentar en práctica."
                 if is_retry:
                     update_student_answer(
                         class_id=class_id, student_id=student_id, question_id=active_question["id"],
@@ -568,21 +574,15 @@ def send_message(class_id, student_id, message) -> ChatResponse:
                         score=2, created_at=now, attempts=MAX_ATTEMPTS,
                     )
                 touched_ids.add(active_question["id"])
-                hint = _generar_pista(active_question["question"], rag_context, student_answer=None,
-                                      hint_level=MAX_HINTS, previous_hint=_last_tutor_message(history))
-                prefix = ("Esta pregunta te costó y está perfecto pedir ayuda. " + hint +
-                          ' Sigamos avanzando; más tarde podés volver a intentarla escribiendo "practicar".')
+                prefix = ('Para esta pregunta ya recibiste una pista. Cerramos esta y seguimos; '
+                          'más tarde podés volver a intentarla escribiendo "practicar".')
                 reply = _advance_reply(class_id, student_id, classroom, questions, touched_ids, prefix)
                 _save_pair(class_id, student_id, message, reply)
                 return ChatResponse(reply=reply)
 
-            # Pista escalonada: más específica que las anteriores y sin repetirlas.
-            if resultado["intencion"] == "ayuda":
-                hint_level = _count_help_since_asked(history, active_question) + 1
-                respuesta = _generar_pista(active_question["question"], rag_context, student_answer=None,
-                                           hint_level=hint_level, previous_hint=_last_tutor_message(history))
-            else:
-                respuesta = resultado["mensaje"]
+            # Primera (y única) pista de esta pregunta.
+            respuesta = _generar_pista(active_question["question"], rag_context, student_answer=None,
+                                       hint_level=1, previous_hint=_last_tutor_message(history))
             _save_pair(class_id, student_id, message, respuesta)
             return ChatResponse(reply=respuesta)
 
@@ -688,6 +688,40 @@ Tutor:"""
     _save_pair(class_id, student_id, message, reply)
     logger.info(f"Aprendizaje (chat libre): alumno {student_id} en clase {class_id}")
     return ChatResponse(reply=reply)
+
+
+def get_progress(class_id, student_id) -> dict:
+    """
+    Devuelve el avance del alumno en la actividad: cuántas preguntas cerró sobre el total.
+    Una pregunta está cerrada si la respondió bien/parcial o agotó los intentos (mismo
+    criterio que el portón de dominio). Sirve para la barra de progreso del chat.
+    """
+    classroom = get_class_by_id(class_id)
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Clase no encontrada.")
+    if not is_enrolled(class_id, student_id):
+        raise HTTPException(status_code=403, detail="No estás inscrito en esta clase.")
+
+    questions = get_questions_by_class(class_id)
+    answers = get_answers_by_student(class_id, student_id)
+    answer_map = {a["question_id"]: a for a in answers}
+
+    def _closed(q):
+        a = answer_map.get(q["id"])
+        return a is not None and (a["correct"] != "no" or a["attempts"] >= MAX_ATTEMPTS)
+
+    total = len(questions)
+    answered = sum(1 for q in questions if _closed(q))
+
+    # Pregunta actual: la última que se le mostró en el chat y todavía no cerró.
+    # Permite mostrarla fija en pantalla para que el alumno no tenga que buscarla.
+    current_question = None
+    history = get_history(class_id, student_id)
+    last_q = _get_last_asked_question(history, questions)
+    if last_q and not _closed(last_q):
+        current_question = last_q["question"]
+
+    return {"answered": answered, "total": total, "current_question": current_question}
 
 
 def get_chat_history(class_id, student_id) -> list[ChatMessage]:

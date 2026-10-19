@@ -13,20 +13,22 @@ from app.models.schemas import (
     ClassResponse,
     ClassSummaryResponse,
     CreateClassResponse,
+    FeedbackRequest,
     JoinClassResponse,
     UserResponse,
 )
-from app.models.schemas import Question
+from app.models.schemas import ProgressResponse, Question
 from app.repositories.question_repository import get_questions_by_class
 from app.services.auth_service import get_current_user
-from app.services.chat_service import get_chat_history, send_message
+from app.services.chat_service import get_chat_history, get_progress, send_message
 from app.services.class_service import (
     create_class_service,
     join_class_service,
     list_student_classes,
     list_teacher_classes,
 )
-from app.repositories.class_repository import delete_class, leave_class
+from app.repositories.class_repository import delete_class, is_enrolled, leave_class
+from app.repositories.feedback_repository import save_feedback
 from app.repositories.notification_repository import (
     count_unread,
     create_notification,
@@ -154,6 +156,34 @@ def chat_history(
         raise HTTPException(status_code=403, detail="Solo los alumnos tienen historial de chat.")
 
     return get_chat_history(class_id=class_id, student_id=current_user.id)
+
+
+# El alumno ve su avance en la actividad (para la barra de progreso del chat)
+@router.get("/{class_id}/progress", response_model=ProgressResponse)
+def chat_progress(
+    class_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Solo los alumnos tienen progreso de actividad.")
+
+    return get_progress(class_id=class_id, student_id=current_user.id)
+
+
+# El alumno vota si la ayuda del tutor le resultó clara/útil (al terminar la actividad)
+@router.post("/{class_id}/feedback", status_code=204)
+def submit_feedback(
+    class_id: str,
+    body: FeedbackRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Solo los alumnos pueden dejar feedback.")
+    if not is_enrolled(class_id, current_user.id):
+        raise HTTPException(status_code=403, detail="No estás inscrito en esta clase.")
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    save_feedback(class_id, current_user.id, body.helpful, created_at)
 
 
 # El docente elimina su clase (cascade — se borra para todos)

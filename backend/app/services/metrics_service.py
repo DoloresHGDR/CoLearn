@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.models.schemas import AnswerRecord, ClassMetrics, StudentMetrics
 from app.repositories.class_repository import get_class_by_id
+from app.repositories.feedback_repository import get_feedback_stats
 from app.repositories.metrics_repository import get_class_metrics, get_student_answer_history
 
 logger = logging.getLogger(__name__)
@@ -61,11 +62,15 @@ def get_metrics(class_id: str, teacher_id: str) -> ClassMetrics:
             joined_at=row["joined_at"],
         ))
 
+    feedback = get_feedback_stats(class_id)
+
     return ClassMetrics(
         class_id=class_id,
         class_name=class_row["name"],
         enrolled_count=len(students),
         students=students,
+        feedback_total=feedback["total"],
+        feedback_positive=feedback["positive"],
     )
 
 
@@ -73,7 +78,9 @@ def _recommended_level(answers_submitted: int, average_score: float) -> str:
     """
     Determina el nivel recomendado según el desempeño del alumno.
     Basado en Mastery Learning (Bloom, 1968): el alumno avanza de nivel
-    solo cuando demuestra dominio del nivel actual (≥ 75% de puntaje).
+    solo cuando demuestra dominio del nivel actual.
+    Menos de 2 respuestas o promedio < 5/10 → "easy"; promedio < 7/10 → "medium";
+    desde 7/10 (≥ 70 % de puntaje) → "hard".
     """
     if answers_submitted < 2 or average_score < 5.0:
         return "easy"

@@ -107,6 +107,20 @@ def init_db():
             )
         """)
 
+        # Tabla de feedback del alumno sobre la utilidad del tutor (un voto por alumno y clase)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS class_feedback (
+                id SERIAL PRIMARY KEY,
+                class_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
+                helpful BOOLEAN NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (class_id) REFERENCES classes(id),
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                UNIQUE(class_id, student_id)
+            )
+        """)
+
         # Migraciones idempotentes para bases de datos ya creadas.
         # Cada uno agrega una columna solo si todavía no existe (Postgres).
         migrations = [
