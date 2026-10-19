@@ -74,14 +74,14 @@ class TestRAGHallucination:
             f"Se esperaba 'cloroplasto' en el contexto pero se obtuvo: {contexto}"
         )
 
-    def test_pregunta_fuera_de_tema_no_coincide_bien(self, pipeline):
+    def test_pregunta_fuera_de_tema_no_recupera_contexto(self, pipeline):
         """
         Cuando la pregunta es sobre un tema totalmente ajeno al documento,
-        el contexto recuperado no debe contener respuestas relevantes.
+        todos los fragmentos superan el umbral de similitud y el contexto
+        recuperado queda vacío. Sin material, el tutor no puede inventar.
 
-        Esto verifica que el RAG no 'inventa' contexto:
-        recupera algo (siempre devuelve k chunks), pero ese algo
-        no responde la pregunta.
+        Verifica el umbral de verdad: si se subiera o se desactivara, la
+        pregunta ajena empezaría a recuperar fragmentos y este test fallaría.
         """
         chunks, index = pipeline
         contexto = search_context(
@@ -90,11 +90,10 @@ class TestRAGHallucination:
             index=index,
             model=embedding_model,
         )
-        # El contexto no debe contener información sobre viajes o precios
-        palabras_ajenas = ["avión", "pasaje", "europa", "precio", "vuelo", "aeropuerto"]
-        tiene_info_ajena = any(p in contexto.lower() for p in palabras_ajenas)
-        assert not tiene_info_ajena, (
-            f"El RAG recuperó contexto que parece responder una pregunta ajena: {contexto}"
+        # El umbral debe rechazar todos los fragmentos: contexto vacío.
+        assert contexto.strip() == "", (
+            f"Se esperaba contexto vacío para una pregunta fuera de tema, "
+            f"pero el umbral admitió fragmentos: {contexto!r}"
         )
 
     def test_chunking_genera_chunks_no_vacios(self):
@@ -105,7 +104,7 @@ class TestRAGHallucination:
             assert chunk.strip() != "", "Se encontró un chunk vacío"
 
     def test_embeddings_tienen_dimension_correcta(self):
-        """Los embeddings deben tener la dimensión esperada del modelo (768 para all-mpnet-base-v2)."""
+        """Los embeddings deben tener la dimensión esperada del modelo (768 para paraphrase-multilingual-mpnet-base-v2)."""
         chunks, embeddings = prepare_data(TEXTO_PRUEBA)
         assert embeddings.shape[0] == len(chunks), "La cantidad de embeddings no coincide con los chunks"
         assert embeddings.shape[1] == 768, f"Dimensión inesperada: {embeddings.shape[1]}"
