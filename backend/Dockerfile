@@ -16,8 +16,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-descargar el modelo de embeddings durante el build para no descargarlo en runtime
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
+# Pre-descargar el modelo de embeddings durante el build para no descargarlo en runtime.
+# Debe coincidir con el modelo de app/rag/chunker.py (multilingüe, español incluido).
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')"
 
 # Copiar el resto del código
 COPY . .

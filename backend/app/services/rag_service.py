@@ -17,15 +17,9 @@ from app.core.cache import (
 
 from app.rag.reader import read_file
 
-from app.rag.chunker import (
-    prepare_data,
-    model
-)
+from app.rag.chunker import prepare_data
 
-from app.rag.indexer import (
-    create_index,
-    search_context
-)
+from app.rag.indexer import create_index
 
 
 # Ejecuta el flujo completo de procesamiento RAG
@@ -40,7 +34,6 @@ def process_rag_pipeline(file_path, content):
     if cached_data:
         text = cached_data["text"]
         chunks = cached_data["chunks"]
-        embeddings = cached_data["embeddings"]
         index = cached_data["index"]
     else:
 

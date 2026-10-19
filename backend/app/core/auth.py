@@ -4,7 +4,7 @@ Utilidades de autenticación: hash de contraseñas y manejo de tokens JWT.
 
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+from jose import jwt
 from passlib.context import CryptContext
 
 from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
