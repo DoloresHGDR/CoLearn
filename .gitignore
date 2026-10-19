@@ -26,3 +26,6 @@ dist/
 # Claude Code — archivos internos del asistente, no deben commitearse
 CLAUDE.md
 .claude/
+# Cobertura de pytest
+.coverage
+htmlcov/
