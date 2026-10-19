@@ -14,18 +14,21 @@ from app.repositories.class_repository import (
     create_class,
     enroll_student,
     get_class_by_code,
-    get_class_by_id,
     get_classes_by_student,
     get_classes_by_teacher,
     is_enrolled,
 )
 from app.repositories.notification_repository import create_notification
-from app.repositories.question_repository import get_questions_by_class, save_question
+from app.repositories.question_repository import save_question
 from app.repositories.user_repository import get_user_by_id
 from app.services.file_service import save_uploaded_file
 from app.services.generation_service import generate_activity
 from app.services.parser_service import parse_generated_activity
 from app.services.rag_service import process_rag_pipeline
+
+# Minimo de caracteres para que haya contexto suficiente para generar preguntas
+# en los tres niveles de Bloom. 1000 chars equivalen a ~150 palabras en español.
+MIN_TEXT_LENGTH = 1000
 
 
 def _generate_join_code() -> str:
@@ -50,6 +53,10 @@ def _row_to_class_response(row) -> ClassResponse:
 async def create_class_service(teacher_id, name, level, focuses, file) -> CreateClassResponse:
     """Crea una nueva clase: guarda el archivo, procesa el RAG y genera la actividad."""
 
+    # Defensa: descartar enfoques vacios y limitar a 3 (el maximo que la generacion aplica).
+    # Asi la base y la generacion quedan consistentes aunque entren mas por API.
+    focuses = [f.strip() for f in focuses if f and f.strip()][:3]
+
     class_id = str(uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
@@ -64,6 +71,15 @@ async def create_class_service(teacher_id, name, level, focuses, file) -> Create
 
     # Procesar el texto con el pipeline RAG
     rag_data = process_rag_pipeline(file_path=file_path, content=content)
+
+    # Rechazar documentos sin texto suficiente (ej: PDF escaneado como imagen),
+    # porque la IA no podria generar preguntas de comprension sobre un texto vacio
+    if len(rag_data["text"].strip()) < MIN_TEXT_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail="El documento no tiene texto suficiente para generar la actividad. "
+            "Si es un PDF escaneado, subi uno con texto seleccionable.",
+        )
 
     # Generar la actividad educativa con la IA
     generated_text = generate_activity(level=level, focuses=focuses, context=rag_data["context"])

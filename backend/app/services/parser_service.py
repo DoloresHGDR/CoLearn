@@ -10,13 +10,25 @@ Se utiliza para:
 
 from app.models.schemas import Question
 
-# Etiquetas que usa el modelo para generar actividades
+# Etiquetas que usa el modelo para generar actividades.
+# Distribucion: 2 faciles + 2 medias + 1 dificil (mas practica en los niveles bajos).
 _LABELS = [
     "INTRODUCTION:",
-    "QUESTION EASY:",
-    "QUESTION MEDIUM:",
+    "QUESTION EASY 1:",
+    "QUESTION EASY 2:",
+    "QUESTION MEDIUM 1:",
+    "QUESTION MEDIUM 2:",
     "QUESTION HARD:",
     "REFLECTION:",
+]
+
+# Cada pregunta esperada con su nivel de dificultad, en orden de presentacion.
+_QUESTION_SPEC = [
+    ("QUESTION EASY 1:", "easy"),
+    ("QUESTION EASY 2:", "easy"),
+    ("QUESTION MEDIUM 1:", "medium"),
+    ("QUESTION MEDIUM 2:", "medium"),
+    ("QUESTION HARD:", "hard"),
 ]
 
 
@@ -46,18 +58,12 @@ def parse_generated_activity(text: str) -> dict:
     reflection = _extract_section(text, "REFLECTION:")
 
     questions = []
-
-    easy_text = _extract_section(text, "QUESTION EASY:")
-    if easy_text:
-        questions.append(Question(id=1, question=easy_text, difficulty="easy"))
-
-    medium_text = _extract_section(text, "QUESTION MEDIUM:")
-    if medium_text:
-        questions.append(Question(id=2, question=medium_text, difficulty="medium"))
-
-    hard_text = _extract_section(text, "QUESTION HARD:")
-    if hard_text:
-        questions.append(Question(id=3, question=hard_text, difficulty="hard"))
+    qid = 1
+    for label, difficulty in _QUESTION_SPEC:
+        question_text = _extract_section(text, label)
+        if question_text:
+            questions.append(Question(id=qid, question=question_text, difficulty=difficulty))
+            qid += 1
 
     return {
         "introduction": introduction,

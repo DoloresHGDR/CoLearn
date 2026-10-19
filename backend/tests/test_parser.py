@@ -15,11 +15,17 @@ class TestParseGeneratedActivity:
 INTRODUCTION:
 Este texto habla sobre el ciclo del agua.
 
-QUESTION EASY:
+QUESTION EASY 1:
 ¿Qué es la evaporación?
 
-QUESTION MEDIUM:
+QUESTION EASY 2:
+¿Qué es la condensación?
+
+QUESTION MEDIUM 1:
 ¿Cómo se forma la lluvia?
+
+QUESTION MEDIUM 2:
+¿Qué relación hay entre el sol y el ciclo del agua?
 
 QUESTION HARD:
 ¿Qué rol juega la temperatura en el ciclo hidrológico?
@@ -30,17 +36,23 @@ El ciclo del agua es fundamental para la vida.
         resultado = parse_generated_activity(texto)
         assert "ciclo del agua" in resultado["introduction"]
 
-    def test_extrae_tres_preguntas(self):
-        """Debe extraer exactamente 3 preguntas con sus dificultades."""
+    def test_extrae_cinco_preguntas(self):
+        """Debe extraer 5 preguntas: 2 fáciles, 2 medias y 1 difícil."""
         texto = """
 INTRODUCTION:
 Introducción de prueba.
 
-QUESTION EASY:
+QUESTION EASY 1:
 ¿Qué es la fotosíntesis?
 
-QUESTION MEDIUM:
+QUESTION EASY 2:
+¿Qué necesitan las plantas para hacerla?
+
+QUESTION MEDIUM 1:
 ¿Dónde ocurre la fotosíntesis?
+
+QUESTION MEDIUM 2:
+¿Por qué es importante para el oxígeno?
 
 QUESTION HARD:
 ¿Cómo afecta la luz a la tasa de fotosíntesis?
@@ -50,11 +62,9 @@ La fotosíntesis es esencial para los ecosistemas.
 """
         resultado = parse_generated_activity(texto)
         preguntas = resultado["questions"]
-        assert len(preguntas) == 3
+        assert len(preguntas) == 5
         dificultades = [p.difficulty for p in preguntas]
-        assert "easy" in dificultades
-        assert "medium" in dificultades
-        assert "hard" in dificultades
+        assert dificultades == ["easy", "easy", "medium", "medium", "hard"]
 
     def test_extrae_reflexion(self):
         """Debe extraer la sección REFLECTION correctamente."""
@@ -62,11 +72,17 @@ La fotosíntesis es esencial para los ecosistemas.
 INTRODUCTION:
 Intro.
 
-QUESTION EASY:
-Pregunta fácil.
+QUESTION EASY 1:
+Pregunta fácil uno.
 
-QUESTION MEDIUM:
-Pregunta media.
+QUESTION EASY 2:
+Pregunta fácil dos.
+
+QUESTION MEDIUM 1:
+Pregunta media uno.
+
+QUESTION MEDIUM 2:
+Pregunta media dos.
 
 QUESTION HARD:
 Pregunta difícil.
