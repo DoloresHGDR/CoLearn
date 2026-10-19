@@ -159,6 +159,25 @@ export async function getChatHistory(classId) {
   return get(`/classes/${classId}/chat`);
 }
 
+// Avance del alumno en la actividad (preguntas cerradas / total) para la barra de progreso
+export async function getProgress(classId) {
+  return get(`/classes/${classId}/progress`);
+}
+
+// El alumno vota si la ayuda del tutor le resultó clara (al terminar la actividad)
+export async function submitFeedback(classId, helpful) {
+  const headers = await authHeaders();
+  const res = await fetchWithTimeout(`${BASE_URL}/classes/${classId}/feedback`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ helpful }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Error al enviar feedback");
+  }
+}
+
 // --- Métricas ---
 
 export async function getMetrics(classId) {
