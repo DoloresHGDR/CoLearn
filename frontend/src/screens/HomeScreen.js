@@ -1,28 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppButton from "../components/AppButton";
 import ClassCard from "../components/ClassCard";
+import NotificationsModal from "../components/NotificationsModal";
 import OwlMascot from "../components/OwlMascot";
 import { deleteClass, getClasses, getMe, getNotifications, leaveClass, markNotificationsRead } from "../services/api";
 import { colors, fontFamily } from "../styles/theme";
-
-// Convierte una fecha ISO en un texto relativo corto ("hace 5 min", "ayer", etc.)
-function timeAgo(iso) {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const diff = Math.max(0, Date.now() - then);
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "recién";
-  if (min < 60) return `hace ${min} min`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "ayer";
-  return `hace ${days} días`;
-}
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -60,13 +46,15 @@ export default function HomeScreen({ navigation }) {
 
   async function openPanel() {
     setPanelOpen(true);
-    if (unread > 0) {
-      try {
-        await markNotificationsRead();
-        setUnread(0);
-      } catch (e) {
-        // sin conexión: se reintenta la próxima vez
-      }
+    if (unread > 0) await markRead();
+  }
+
+  async function markRead() {
+    try {
+      await markNotificationsRead();
+      setUnread(0);
+    } catch (e) {
+      // sin conexión: se reintenta la próxima vez
     }
   }
 
@@ -193,54 +181,13 @@ export default function HomeScreen({ navigation }) {
         />
       )}
 
-      {/* Panel de notificaciones del docente */}
-      <Modal visible={panelOpen} transparent animationType="fade" onRequestClose={() => setPanelOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setPanelOpen(false)}>
-          <Pressable style={[styles.panel, { top: insets.top + 56 }]} onPress={() => {}}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Notificaciones</Text>
-              <TouchableOpacity onPress={() => setPanelOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={18} color={colors.muted} />
-              </TouchableOpacity>
-            </View>
-            {notifications.length === 0 ? (
-              <View style={styles.panelEmpty}>
-                <Ionicons name="notifications-off-outline" size={26} color={colors.faint} />
-                <Text style={styles.panelEmptyText}>No tenés notificaciones todavía.</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={notifications}
-                keyExtractor={(item) => String(item.id)}
-                style={{ maxHeight: 340 }}
-                renderItem={({ item }) => {
-                  const joined = item.event_type === "join";
-                  return (
-                    <View style={styles.notifRow}>
-                      <View style={[styles.notifIcon, { backgroundColor: joined ? colors.primarySoft : colors.sunk }]}>
-                        <Ionicons
-                          name={joined ? "person-add" : "exit-outline"}
-                          size={15}
-                          color={joined ? colors.primary : colors.muted}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.notifText}>
-                          <Text style={styles.notifName}>{item.student_name}</Text>
-                          {joined ? " se unió a " : " salió de "}
-                          <Text style={styles.notifClass}>{item.class_name}</Text>
-                        </Text>
-                        <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
-                      </View>
-                    </View>
-                  );
-                }}
-                ItemSeparatorComponent={() => <View style={styles.notifSep} />}
-              />
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Panel de notificaciones del docente (bottom sheet) */}
+      <NotificationsModal
+        visible={panelOpen}
+        notifications={notifications}
+        onClose={() => setPanelOpen(false)}
+        onMarkRead={markRead}
+      />
     </View>
   );
 }
@@ -254,21 +201,8 @@ const styles = StyleSheet.create({
   logo: { fontFamily: fontFamily.serifSemi, fontSize: 19, color: colors.ink, letterSpacing: -0.3 },
   navActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  badge: { position: "absolute", top: -3, right: -3, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.bg },
-  badgeText: { fontFamily: fontFamily.sansBold, fontSize: 9.5, color: "#fff" },
-  overlay: { flex: 1, backgroundColor: "rgba(58,33,26,0.18)" },
-  panel: { position: "absolute", right: 20, left: 20, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.border, paddingVertical: 6, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
-  panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
-  panelTitle: { fontFamily: fontFamily.serifSemi, fontSize: 16, color: colors.ink },
-  panelEmpty: { alignItems: "center", paddingVertical: 28, gap: 8 },
-  panelEmptyText: { fontFamily: fontFamily.sansRegular, fontSize: 13, color: colors.muted },
-  notifRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 16, paddingVertical: 11 },
-  notifIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  notifText: { fontFamily: fontFamily.sansRegular, fontSize: 13.5, color: colors.ink, lineHeight: 18 },
-  notifName: { fontFamily: fontFamily.sansBold, color: colors.ink },
-  notifClass: { fontFamily: fontFamily.sansSemi, color: colors.primary },
-  notifTime: { fontFamily: fontFamily.sansRegular, fontSize: 11.5, color: colors.faint, marginTop: 2 },
-  notifSep: { height: 1, backgroundColor: colors.line, marginLeft: 59 },
+  badge: { position: "absolute", top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.bg },
+  badgeText: { fontFamily: fontFamily.sansBold, fontSize: 10.5, color: "#fff" },
   roleBadge: { fontFamily: fontFamily.sansBold, fontSize: 12, color: colors.accent, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 },
   greeting: { fontFamily: fontFamily.serifSemi, fontSize: 30, color: colors.ink, letterSpacing: -0.6, lineHeight: 34 },
   sub: { fontFamily: fontFamily.sansRegular, fontSize: 14.5, color: colors.muted, marginTop: 6 },

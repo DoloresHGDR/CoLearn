@@ -1,33 +1,43 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppButton from "../components/AppButton";
 import OwlMascot from "../components/OwlMascot";
 import { colors, fontFamily } from "../styles/theme";
 
-// Anillo pulsante que se expande y desvanece desde el circulo del buho.
+// Anillo pulsante que se expande y desvanece desde el circulo del buho ("IA activa").
 function OwlRing({ delay }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       Animated.loop(
-        Animated.timing(anim, { toValue: 1, duration: 1500, useNativeDriver: true })
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 4200,
+          easing: Easing.bezier(0.16, 0.8, 0.4, 1),
+          useNativeDriver: true,
+        })
       ).start();
     }, delay);
     return () => clearTimeout(timeout);
   }, [anim, delay]);
 
-  const scale   = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] });
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0] });
+  const scale   = anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.75] });
+  const opacity = anim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.32, 0, 0] });
 
-  return (
-    <Animated.View style={[styles.ring, { transform: [{ scale }], opacity }]} />
-  );
+  return <Animated.View style={[styles.ring, { opacity, transform: [{ scale }] }]} />;
 }
 
 export default function WelcomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => { if (mounted) setReduceMotion(v); });
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -35,11 +45,11 @@ export default function WelcomeScreen({ navigation }) {
       <View style={[styles.hero, { paddingTop: insets.top + 40 }]}>
         {/* Escenario del buho: los anillos se posicionan absolutamente sobre el circulo */}
         <View style={styles.owlStage}>
-          <OwlRing delay={0} />
-          <OwlRing delay={500} />
-          <OwlRing delay={1000} />
+          {!reduceMotion && <OwlRing delay={1100} />}
+          {!reduceMotion && <OwlRing delay={2500} />}
+          {!reduceMotion && <OwlRing delay={3900} />}
           <View style={styles.owlCircle}>
-            <OwlMascot size={68} onDark animated />
+            <OwlMascot size={68} onDark intro reduceMotion={reduceMotion} />
           </View>
         </View>
 
