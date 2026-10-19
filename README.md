@@ -8,10 +8,10 @@ Proyecto final de carrera — Ingeniería en Software, Universidad de Mendoza.
 
 ## ¿Qué hace?
 
-- El **docente** sube un documento (PDF, DOCX o TXT), elige el nivel y los enfoques pedagógicos, y el sistema genera una actividad completa con introducción, preguntas de dificultad progresiva y reflexión final.
-- El **alumno** se une a la clase con un código corto (ej: `abc-123`) y puede chatear con una IA tutora que responde únicamente desde el texto del docente.
-- El alumno puede responder las preguntas generadas y recibir feedback evaluado por Gemini.
-- El docente puede ver métricas de participación: cuántos mensajes envió cada alumno, cuántas preguntas respondió y su puntaje promedio.
+- El **docente** sube un documento (PDF, DOCX o TXT), elige el nivel y hasta tres enfoques pedagógicos (por ejemplo, inferencia o idea principal), y el sistema genera una actividad con introducción, cinco preguntas de comprensión lectora (2 fáciles, 2 medias y 1 difícil, según la taxonomía revisada de Bloom) y una reflexión final.
+- El **alumno** se une a la clase con un código corto (ej: `abc123`) y resuelve la actividad en un chat guiado con una IA tutora que trabaja solo sobre el texto del docente.
+- El tutor clasifica la intención de cada mensaje (respuesta, pedido de ayuda o fuera de tema), corrige las respuestas con un segundo intento ante el error y da pistas que remiten al texto sin revelar la respuesta.
+- El docente ve el desempeño de cada alumno por nivel de dificultad y un resumen escrito por la IA. Los nombres de los alumnos nunca se envían al modelo externo.
 
 ---
 
@@ -21,12 +21,11 @@ Proyecto final de carrera — Ingeniería en Software, Universidad de Mendoza.
 - Python 3.11 + FastAPI
 - PostgreSQL + psycopg2
 - JWT (python-jose + passlib/bcrypt)
-- RAG: SentenceTransformers (`all-mpnet-base-v2`) + FAISS
-- OpenRouter (GPT-3.5-turbo) para generación de actividades y chat
-- Google Gemini (`gemini-1.5-flash`) para evaluación de respuestas
+- RAG: SentenceTransformers (`paraphrase-multilingual-mpnet-base-v2`, multilingüe) + FAISS
+- OpenRouter (`openai/gpt-4o-mini`, configurable con `OPENROUTER_MODEL`) para generar actividades, evaluar respuestas, dar pistas y resumir la clase
 
-**Frontend** *(en desarrollo)*
-- Expo / React Native
+**Frontend**
+- Expo / React Native (Android)
 
 **Infraestructura**
 - Docker + docker-compose
@@ -88,6 +87,14 @@ uvicorn app.main:app --reload
 La API queda disponible en `http://localhost:8000`.  
 Documentación interactiva: `http://localhost:8000/docs`
 
+### Con Docker
+
+```bash
+docker compose up -d --build
+```
+
+Levanta PostgreSQL (puerto 5433) y la API (puerto 8800). El código se copia dentro de la imagen, así que después de cada cambio hay que volver a construirla con `--build`.
+
 ---
 
 ## Variables de entorno
@@ -96,10 +103,11 @@ Documentación interactiva: `http://localhost:8000/docs`
 |---|---|
 | `DATABASE_URL` | URL de conexión a PostgreSQL |
 | `SECRET_KEY` | Clave para firmar tokens JWT |
-| `OPENROUTER_API_KEY` | Clave de OpenRouter (GPT-3.5) |
-| `GOOGLE_API_KEY` | Clave de Google Gemini |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Duración del token en minutos |
+| `OPENROUTER_API_KEY` | Clave de OpenRouter |
+| `OPENROUTER_MODEL` | Modelo de lenguaje (por defecto `openai/gpt-4o-mini`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Duración del token en minutos (por defecto 60) |
 | `DATA_DIR` | Carpeta para uploads y caché de embeddings |
+| `INSTITUTIONAL_EMAIL_SUFFIX` | Sufijo del correo institucional exigido en el registro (por defecto `.edu.ar`) |
 
 ---
 
@@ -113,11 +121,18 @@ Documentación interactiva: `http://localhost:8000/docs`
 | POST | `/classes` | Docente crea una clase con archivo |
 | GET | `/classes` | Listar clases (del docente o del alumno) |
 | POST | `/classes/join` | Alumno se une con código |
-| POST | `/classes/{id}/chat` | Alumno envía mensaje a la IA |
-| GET | `/classes/{id}/chat` | Historial de chat |
-| GET | `/classes/{id}/questions` | Preguntas generadas de la clase |
-| POST | `/classes/{id}/questions/{qid}/answer` | Alumno responde una pregunta |
-| GET | `/classes/{id}/metrics` | Docente ve métricas de participación |
+| GET | `/classes/{id}/file` | Alumno descarga el texto de la clase |
+| POST | `/classes/{id}/chat` | Alumno envía un mensaje al tutor |
+| GET | `/classes/{id}/chat` | Historial de chat del alumno |
+| GET | `/classes/{id}/progress` | Avance del alumno en la actividad |
+| POST | `/classes/{id}/feedback` | Alumno vota si la ayuda del tutor le resultó clara |
+| GET | `/classes/{id}/teacher-questions` | Docente ve las preguntas generadas |
+| GET | `/classes/{id}/metrics` | Docente ve el desempeño de cada alumno |
+| GET | `/classes/{id}/summary` | Docente ve el resumen de la clase escrito por la IA |
+| DELETE | `/classes/{id}` | Docente elimina la clase |
+| DELETE | `/classes/{id}/leave` | Alumno abandona la clase |
+| GET | `/classes/notifications` | Notificaciones del docente |
+| POST | `/classes/notifications/read` | Marca las notificaciones como leídas |
 
 ---
 
@@ -128,10 +143,15 @@ cd backend
 pytest tests/ -v
 ```
 
-Incluye:
-- Tests unitarios de autenticación (hashing y tokens JWT)
-- Tests unitarios del parser de respuestas de la IA
-- Tests de alucinación del pipeline RAG (verifica que el sistema no recupera contexto inventado)
+Son 53 pruebas unitarias (la base de datos y la IA se reemplazan por dobles de prueba):
+- `test_auth.py`: hashing de contraseñas y tokens JWT
+- `test_context_loss.py`: armado del historial de la conversación
+- `test_parser.py`: lectura de la actividad generada (5 preguntas: 2 fáciles, 2 medias y 1 difícil)
+- `test_rag_hallucination.py`: el umbral de similitud deja el contexto vacío ante una pregunta ajena al texto
+- `test_metrics.py`: métricas por alumno y nivel recomendado
+- `test_summary.py`: caché del resumen del docente y que ningún nombre de alumno llegue a la IA
+
+Los scripts `eval_umbral.py` y `eval_evaluacion.py` reproducen las mediciones del capítulo de resultados de la tesis (el segundo hace llamadas reales a OpenRouter).
 
 ---
 
@@ -142,11 +162,11 @@ Incluye:
 | Autenticación | ✅ Completo |
 | Sistema de clases | ✅ Completo |
 | Pipeline RAG | ✅ Completo |
-| Chat con IA | ✅ Completo |
-| Evaluación con Gemini | ✅ Completo |
-| Métricas del docente | ✅ Completo |
+| Chat con IA (tutor guiado) | ✅ Completo |
+| Evaluación de respuestas con OpenRouter | ✅ Completo |
+| Métricas y resumen del docente | ✅ Completo |
 | Tests | ✅ Completo |
-| Frontend mobile | 🚧 En desarrollo |
+| Frontend mobile (Android) | ✅ Completo |
 
 ---
 
