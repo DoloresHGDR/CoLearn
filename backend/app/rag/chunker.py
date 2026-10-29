@@ -33,8 +33,8 @@ def prepare_data(text):
     else:
         chunk_size = 5
 
-    # Solapamiento entre chunks: 1 oración compartida entre chunks adyacentes
-    # Evita perder contexto en los bordes (Lewis et al., 2020 — RAG original paper)
+    # Solapamiento: 1 oración compartida entre chunks adyacentes,
+    # para no perder contexto en los bordes
     overlap = 1 if chunk_size > 1 else 0
     step = chunk_size - overlap
 
@@ -45,7 +45,7 @@ def prepare_data(text):
         if chunk.strip():
             chunks.append(chunk)
 
-    # Generar embeddings normalizados (necesario para usar distancia coseno con umbral)
+    # Generar embeddings normalizados (así la distancia L2 equivale a la similitud coseno)
     embeddings = model.encode(chunks, normalize_embeddings=True)
     embeddings = np.array(embeddings).astype("float32")
 
