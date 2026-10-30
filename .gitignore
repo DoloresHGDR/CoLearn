@@ -4,6 +4,9 @@ __pycache__/
 .env
 venv/
 
+# Claves de acceso a servidores (por ejemplo, la del servidor en la nube)
+*.pem
+
 # Base de datos local
 *.db
 

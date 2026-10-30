@@ -4,16 +4,18 @@ services:
   db:
     image: postgres:15
     container_name: colearn_db
+    # Usuario, contraseña y nombre de la base salen del .env de esta carpeta (ver .env.example)
     environment:
-      POSTGRES_USER: colearn
-      POSTGRES_PASSWORD: colearn123
-      POSTGRES_DB: colearn
+      POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en .env}
+    # Solo accesible desde la propia máquina: en la nube la base no queda abierta a internet
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U colearn"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,7 +29,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql://colearn:colearn123@db:5432/colearn
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy

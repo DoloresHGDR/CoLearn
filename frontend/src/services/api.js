@@ -4,10 +4,17 @@ import Constants from "expo-constants";
 // Puerto del backend (fijo). La IP de la PC se detecta sola.
 const BACKEND_PORT = 8800;
 
+// Dirección del servidor en la nube. Se define en frontend/.env como EXPO_PUBLIC_API_URL
+// (por ejemplo https://colearn.midominio.com). Si no está, se usa el backend de la PC.
+const CLOUD_URL = process.env.EXPO_PUBLIC_API_URL;
+
 // Deriva la IP automáticamente desde el host de Expo (Metro): el celular ya se
 // conecta a la PC por esa IP, así que la reutilizamos para el backend.
 // Evita tener que editar la IP a mano cada vez que cambia la red.
 function resolveBaseUrl() {
+  if (CLOUD_URL) {
+    return CLOUD_URL.replace(/\/+$/, "");
+  }
   const hostUri =
     Constants.expoConfig?.hostUri ||
     Constants.manifest?.debuggerHost ||

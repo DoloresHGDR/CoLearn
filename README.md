@@ -90,10 +90,14 @@ Documentación interactiva: `http://localhost:8000/docs`
 ### Con Docker
 
 ```bash
+cp .env.example .env            # usuario, contraseña y nombre de la base
+cp backend/.env.example backend/.env
 docker compose up -d --build
 ```
 
-Levanta PostgreSQL (puerto 5433) y la API (puerto 8800). El código se copia dentro de la imagen, así que después de cada cambio hay que volver a construirla con `--build`.
+Levanta PostgreSQL y la API (puerto 8800). La base solo acepta conexiones desde la propia máquina (puerto 5433), así que en un servidor no queda expuesta a internet. El código se copia dentro de la imagen, así que después de cada cambio hay que volver a construirla con `--build`.
+
+Para que la app del celular use un servidor en la nube, copiar `frontend/.env.example` como `frontend/.env` y completar `EXPO_PUBLIC_API_URL` con su dirección (con `https`). Si queda vacía, la app usa el backend de la PC en la misma red.
 
 ---
 
